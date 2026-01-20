@@ -189,6 +189,18 @@ code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;border:1
 .ending-number{font-size:36px;font-weight:700;color:#7dd3fc;margin-bottom:5px}
 .ending-label{color:#a7b0c0;font-size:14px}
 .ending-hashtags{margin-top:40px;color:#7dd3fc;font-weight:600}
+.pastebox{margin-top:10px;display:grid;gap:10px}
+.textarea, textarea#jsonInput{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid rgba(37,48,74,.75);
+  background: rgba(255,255,255,.04);
+  color: var(--text);
+  font-family: ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono",monospace;
+  resize: vertical;
+}
+.paste-actions{display:flex;gap:10px;flex-wrap:wrap}
 
 .uploader{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
 .uploader-actions{margin-top:12px;text-align:center}

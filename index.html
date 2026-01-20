@@ -53,7 +53,7 @@
             <li>Show your bookmarks bar (Chrome: View → Always Show Bookmarks Bar).</li>
             <li><b>Drag</b> the button above to your bookmarks bar (or create a bookmark and paste the copied URL).</li>
             <li>Open DKU Card → Transaction History page.</li>
-            <li>Click the bookmark → your CSV downloads.</li>
+            <li>Click the bookmark → it will open this page with your data (Safari may download a CSV instead).</li>
           </ol>
         </details>
       </div>
@@ -72,6 +72,21 @@
           Expected columns: <code>dateTime,type,txn,service,amount,status</code>
         </div>
       </div>
+
+      <details id="jsonImport" class="details">
+        <summary>Safari / fallback: Import JSON (paste)</summary>
+        <div class="pastebox">
+          <p class="muted" style="margin-top:8px">
+            If the exporter copied your data to the clipboard, paste it here and click Import.
+          </p>
+          <textarea id="jsonInput" class="textarea" rows="6" placeholder='Paste JSON here (starts with {"k":"DKU_WRAP_V1" ...)' spellcheck="false"></textarea>
+          <div class="paste-actions">
+            <button id="btnPasteJson" class="btn btn-secondary btn-small" type="button">Paste from clipboard</button>
+            <button id="btnImportJson" class="btn btn-small" type="button">Import JSON</button>
+            <button id="btnClearJson" class="btn btn-secondary btn-small" type="button">Clear</button>
+          </div>
+        </div>
+      </details>
 
       <div id="status" class="status muted">No file loaded.</div>
     </section>

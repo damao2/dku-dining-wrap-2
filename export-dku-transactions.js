@@ -18,7 +18,7 @@
    * Handoff mode
    *
    * By default we do NOT download a CSV.
-   * Instead we store the rows in window.name and redirect to your GitHub Pages app.
+   * Instead we open your DKU Dining Wrap page in a new tab and transfer the rows via postMessage.
    * This makes the user flow: (1) open Transaction History page -> (2) click bookmark -> done.
    *
    * If you still want the CSV download, set:
@@ -27,22 +27,9 @@
    ***********************/
 
   const WRAP_URL = "https://williamguo34.github.io/dku-dining-wrap/";
+  const WRAP_ORIGIN = "https://williamguo34.github.io"; // targetOrigin must match exactly
   const HANDOFF_STORAGE_KEY = "DKU_WRAP_V1";
-  // Safari is much more likely to truncate/clear window.name on cross-site navigation.
-  // Keep this conservative; we also provide clipboard/CSV fallbacks.
-  const HANDOFF_MAX_BYTES = 1_000_000; // ~1MB
-
-  // Some portals embed the transaction page inside frames/iframes.
-  // In that case, using `window.name` / `location.href` on the subframe may not
-  // navigate the whole tab, and the name may not persist as expected.
-  // We therefore prefer operating on the top browsing context when possible.
-  const TOP = (() => {
-    try {
-      return window.top && window.top !== window ? window.top : window;
-    } catch {
-      return window;
-    }
-  })();
+  const CHUNK_SIZE = 200_000; // characters per postMessage chunk (conservative)
 
   (async () => {
     try {
@@ -70,51 +57,123 @@
        ***********************/
       const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-      function isSafariLike() {
-        // Best-effort UA check. We mainly want Safari proper (incl. Mobile Safari),
-        // but exclude Chrome/Edge shells (including iOS variants).
-        const ua = String(navigator.userAgent || "");
-        const isSafari = /Safari\//.test(ua)
-          && !/Chrome\//.test(ua)
-          && !/Chromium\//.test(ua)
-          && !/CriOS\//.test(ua)
-          && !/Edg\//.test(ua)
-          && !/EdgiOS\//.test(ua);
-        return isSafari;
-      }
-
-      async function copyToClipboard(text) {
+      function openWrapWindow() {
+        // about:blank -> write a small message -> then navigate to WRAP_URL
+        // This reduces the chance that the new tab looks like a "sudden popup".
+        const w = window.open("about:blank", "_blank");
+        if (!w) return null;
         try {
-          if (navigator.clipboard && typeof navigator.clipboard.writeText === "function") {
-            await navigator.clipboard.writeText(text);
-            return true;
-          }
+          w.document.write("<p style='font-family:system-ui'>Loading DKU Dining Wrap…</p>");
         } catch {}
-        return false;
+        try { w.location.href = WRAP_URL + "#handoff"; } catch {}
+        return w;
       }
 
-      function openWrapInNewTabWithName(nameStr) {
-        // In Safari, same-tab cross-site navigation often loses window.name.
-        // New-tab handoff via about:blank tends to be more reliable.
-        try {
-          const w = window.open("about:blank", "_blank");
-          if (!w) return false;
-          try { w.name = nameStr; } catch {}
-          try { w.location.href = WRAP_URL; } catch {}
-          return true;
-        } catch {
+      function splitString(str, size) {
+        const out = [];
+        for (let i = 0; i < str.length; i += size) out.push(str.slice(i, i + size));
+        return out;
+      }
+
+      async function handoffToWrap(payloadObj, { csvFallbackText, csvFilename }) {
+        const wrapWin = openWrapWindow();
+        if (!wrapWin) {
+          // Popup was blocked.
+          if (csvFallbackText) {
+            downloadCSV(csvFallbackText, csvFilename || "dku_transactions.csv");
+            alert("Popup was blocked: downloaded CSV instead. Please upload it to DKU Dining Wrap.");
+            return false;
+          }
+          alert("Popup was blocked. Please allow popups or use CSV upload.");
           return false;
         }
-      }
 
-      async function redirectWithBestEffort() {
-        // Give browsers a moment to persist window.name.
-        await sleep(60);
-        try {
-          TOP.location.replace(WRAP_URL);
-        } catch {
-          try { location.replace(WRAP_URL); } catch { location.href = WRAP_URL; }
+        // 1) Wait for READY (handshake) from Wrap page
+        const sessionId = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const timeoutMs = 8000;
+
+        const json = JSON.stringify(payloadObj);
+        const chunks = splitString(json, CHUNK_SIZE);
+
+        let ready = false;
+        let ackedAll = false;
+
+        await new Promise((resolve) => {
+          const t0 = Date.now();
+
+          function cleanup() {
+            window.removeEventListener("message", onMsg);
+            resolve();
+          }
+
+          function onMsg(ev) {
+            // Only trust messages from our Wrap origin.
+            if (ev.origin !== WRAP_ORIGIN) return;
+            const msg = ev.data;
+
+            if (!msg || msg.__dku_wrap__ !== true) return;
+            if (msg.sessionId !== sessionId) return;
+
+            if (msg.type === "READY") {
+              ready = true;
+
+              // 2) Send META (how many chunks, total length, etc.).
+              wrapWin.postMessage(
+                { __dku_wrap__: true, type: "META", sessionId, totalChunks: chunks.length, totalLen: json.length },
+                WRAP_ORIGIN
+              );
+
+              // 3) Send chunks.
+              for (let i = 0; i < chunks.length; i++) {
+                wrapWin.postMessage(
+                  { __dku_wrap__: true, type: "CHUNK", sessionId, index: i, data: chunks[i] },
+                  WRAP_ORIGIN
+                );
+              }
+
+              // 4) Send END.
+              wrapWin.postMessage(
+                { __dku_wrap__: true, type: "END", sessionId },
+                WRAP_ORIGIN
+              );
+            }
+
+            if (msg.type === "RECEIVED") {
+              // Wrap successfully reassembled and parsed the payload.
+              ackedAll = true;
+              cleanup();
+            }
+
+            if (msg.type === "ERROR") {
+              console.warn("Wrap ERROR:", msg.message);
+              cleanup();
+            }
+          }
+
+          window.addEventListener("message", onMsg);
+
+          // If the Wrap page loads and sends READY before our listener is attached,
+          // we might miss it. To avoid that, send a PING to prompt a READY.
+          wrapWin.postMessage({ __dku_wrap__: true, type: "PING", sessionId }, WRAP_ORIGIN);
+
+          const timer = setInterval(() => {
+            if (Date.now() - t0 > timeoutMs) {
+              clearInterval(timer);
+              cleanup();
+            }
+          }, 200);
+        });
+
+        if (ready && ackedAll) return true;
+
+        // Fallback: CSV download (window.name is no longer the primary path).
+        if (csvFallbackText) {
+          downloadCSV(csvFallbackText, csvFilename || "dku_transactions.csv");
+          alert("Automatic transfer did not complete. Downloaded CSV instead; please upload it to DKU Dining Wrap.");
+        } else {
+          alert("Automatic transfer did not complete. Please use CSV upload.");
         }
+        return false;
       }
 
       function assertOnPage() {
@@ -355,16 +414,15 @@
       const mode = String(window.__DKU_DINING_EXPORT_MODE__ || "").toLowerCase();
       const wantsDownload = mode === "download";
 
+      const csv = toCSV(uniq);
+
       if (wantsDownload) {
-        const csv = toCSV(uniq);
         downloadCSV(csv, EXPORT_FILENAME);
         console.log(`✅ Exported ${EXPORT_FILENAME}`);
         return;
       }
 
-      // --- Handoff via window.name (no server, no file download)
-      // IMPORTANT: window.name has size limits (browser-dependent). If we exceed it,
-      // we fall back to CSV download.
+      // --- Handoff via postMessage (no server, no file download)
       const payload = {
         k: HANDOFF_STORAGE_KEY,
         v: 1,
@@ -372,58 +430,7 @@
         rows: uniq,
       };
 
-      const json = JSON.stringify(payload);
-      if (json.length > HANDOFF_MAX_BYTES) {
-        console.warn(`window.name payload too large (${json.length} bytes). Falling back to CSV download.`);
-        alert(
-          "Your transaction history is too large to pass via window.name.\n\n" +
-          "We will download a CSV instead. Please upload it to the DKU Dining Wrap page."
-        );
-        const csv = toCSV(uniq);
-        downloadCSV(csv, EXPORT_FILENAME);
-        return;
-      }
-
-      // Write to both current window and top window (best-effort)
-      const nameStr = `${HANDOFF_STORAGE_KEY}:${json}`;
-
-      // --- Safari strategy:
-      // 1) Try opening a new tab and setting window.name there.
-      // 2) If blocked/unreliable, copy JSON payload to clipboard and open Wrap with #paste.
-      // 3) If clipboard fails, fall back to CSV download.
-      if (isSafariLike()) {
-        const opened = openWrapInNewTabWithName(nameStr);
-        if (opened) {
-          console.log("✅ Safari: opened Wrap in a new tab with window.name handoff.");
-          return;
-        }
-
-        const copied = await copyToClipboard(json);
-        if (copied) {
-          alert(
-            "Safari can't reliably do one-click transfer here.\n\n" +
-            "✅ Your data has been copied to the clipboard.\n" +
-            "Next: open DKU Dining Wrap and click 'Import JSON' (paste) in section 2."
-          );
-          try { TOP.location.href = WRAP_URL + "#paste"; } catch { location.href = WRAP_URL + "#paste"; }
-          return;
-        }
-
-        alert(
-          "Safari can't reliably do one-click transfer here, and clipboard access was blocked.\n\n" +
-          "We will download a CSV instead. Please upload it to the DKU Dining Wrap page."
-        );
-        const csv = toCSV(uniq);
-        downloadCSV(csv, EXPORT_FILENAME);
-        return;
-      }
-
-      // --- Default strategy (Chrome/Edge/Firefox): same-tab window.name + navigation
-      try { window.name = nameStr; } catch {}
-      try { TOP.name = nameStr; } catch {}
-
-      console.log("✅ Saved rows into window.name. Redirecting to DKU Dining Wrap…");
-      await redirectWithBestEffort();
+      await handoffToWrap(payload, { csvFallbackText: csv, csvFilename: EXPORT_FILENAME });
     } catch (e) {
       console.error(e);
       alert("❌ Export failed: " + (e?.message || e));
