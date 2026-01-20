@@ -64,6 +64,10 @@
 
       <div class="uploader">
         <input id="fileInput" type="file" accept=".csv,text/csv" />
+        <div class="uploader-actions">
+          <button id="btnLoadSample" class="btn btn-secondary">Try with sample data</button>
+          <button id="btnDownloadTemplate" class="btn btn-secondary">Download CSV template</button>
+        </div>
         <div class="hint muted">
           Expected columns: <code>dateTime,type,txn,service,amount,status</code>
         </div>
@@ -83,52 +87,29 @@
         </div>
 
         <div id="slides" class="slides">
-          <!-- Slide 1 -->
-          <section class="slide" data-title="Overview">
+          <!-- Slide 1: Personality -->
+          <section class="slide" data-title="Your Dining Personality">
             <div class="slide-inner">
-              <div class="kpi-grid">
-                <div class="kpi">
-                  <div class="kpi-label">Total spend</div>
-                  <div id="kpiTotalSpend" class="kpi-value">—</div>
-                  <div class="kpi-sub muted" id="kpiSpendSub">—</div>
-                </div>
-                <div class="kpi">
-                  <div class="kpi-label">Transactions</div>
-                  <div id="kpiTxnCount" class="kpi-value">—</div>
-                  <div class="kpi-sub muted" id="kpiTxnSub">—</div>
-                </div>
-                <div class="kpi">
-                  <div class="kpi-label">Favorite place</div>
-                  <div id="kpiFav" class="kpi-value">—</div>
-                  <div class="kpi-sub muted" id="kpiFavSub">—</div>
-                </div>
-              </div>
-
-              <div class="note">
-                <div class="note-title">Your dining vibe</div>
-                <div id="vibeText" class="note-body">Upload a CSV to generate your Wrap.</div>
-              </div>
+              <!-- Dynamic content rendered by JS -->
             </div>
           </section>
 
-          <!-- Slide 2 -->
-          <section class="slide" data-title="Top places">
+          <!-- Slide 2: Big Picture -->
+          <section class="slide" data-title="The Big Picture">
             <div class="slide-inner">
-              <div class="grid-2">
-                <div>
-                  <h3>Top places by spend</h3>
-                  <canvas id="chartTopSpend" height="220"></canvas>
-                </div>
-                <div>
-                  <h3>Top places by visits</h3>
-                  <ol id="listTopVisits" class="list"></ol>
-                </div>
-              </div>
+              <!-- Dynamic content rendered by JS -->
             </div>
           </section>
 
-          <!-- Slide 3 -->
-          <section class="slide" data-title="When you eat">
+          <!-- Slide 3: Timeline -->
+          <section class="slide" data-title="Your Dining Timeline">
+            <div class="slide-inner">
+              <!-- Dynamic content rendered by JS -->
+            </div>
+          </section>
+
+          <!-- Slide 4: Daily Rhythm -->
+          <section class="slide" data-title="The Daily Rhythm">
             <div class="slide-inner">
               <div class="grid-2">
                 <div>
@@ -143,33 +124,125 @@
             </div>
           </section>
 
-          <!-- Slide 4 -->
-          <section class="slide" data-title="Trends">
+          <!-- Slide 5: Location Legends -->
+          <section class="slide" data-title="Location Legends">
             <div class="slide-inner">
-              <div class="grid-1">
+              <div class="grid-2">
                 <div>
-                  <h3>Monthly spend</h3>
-                  <canvas id="chartMonths" height="240"></canvas>
+                  <h3>Top places by spend</h3>
+                  <canvas id="chartTopSpend" height="220"></canvas>
                 </div>
-              </div>
-              <div class="note">
-                <div class="note-title">Quick stat</div>
-                <div id="trendText" class="note-body">—</div>
+                <div>
+                  <h3>Top places by visits</h3>
+                  <ol id="listTopVisits" class="list"></ol>
+                </div>
               </div>
             </div>
           </section>
 
-          <!-- Slide 5 -->
-          <section class="slide" data-title="Share">
+          <!-- Slide 6: Money Talks -->
+          <section class="slide" data-title="Money Talks">
             <div class="slide-inner">
-              <h3>Share-ready</h3>
-              <p class="muted">
-                Export as PNG using the buttons at the top. If your CSV includes non-dining purchases, you can filter later (MVP keeps all).
-              </p>
-              <div class="note">
-                <div class="note-title">Privacy</div>
-                <div class="note-body">
-                  Your file never leaves your browser. No uploads, no analytics.
+              <div class="money-stats">
+                <h3>Your Dining Investment</h3>
+                <div class="spending-breakdown">
+                  <div class="spend-category">
+                    <div class="category-icon">🍜</div>
+                    <div class="category-info">
+                      <div class="category-name">Average Meal</div>
+                      <div class="category-value" id="avgMealCost">—</div>
+                    </div>
+                  </div>
+                  <div class="spend-category">
+                    <div class="category-icon">💰</div>
+                    <div class="category-info">
+                      <div class="category-name">Total Invested</div>
+                      <div class="category-value" id="totalInvested">—</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Slide 7: Achievement Unlocked -->
+          <section class="slide" data-title="Achievement Unlocked!">
+            <div class="slide-inner">
+              <!-- Dynamic content rendered by JS -->
+            </div>
+          </section>
+
+          <!-- Slide 8: Compared to DKU -->
+          <section class="slide" data-title="Compared to DKU">
+            <div class="slide-inner">
+              <div class="comparison">
+                <h3>How You Stack Up</h3>
+                <div class="comparison-stats">
+                  <div class="comparison-item">
+                    <div class="comparison-label">Your meal frequency</div>
+                    <div class="comparison-value" id="mealFrequency">—</div>
+                    <div class="comparison-percentile" id="frequencyPercentile">—</div>
+                  </div>
+                  <div class="comparison-item">
+                    <div class="comparison-label">Your spending level</div>
+                    <div class="comparison-value" id="spendingLevel">—</div>
+                    <div class="comparison-percentile" id="spendingPercentile">—</div>
+                  </div>
+                </div>
+                <div class="comparison-note">
+                  <p>Compared to typical DKU students 📊</p>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <!-- Slide 9: Memory Lane -->
+          <section class="slide" data-title="Memory Lane">
+            <div class="slide-inner">
+              <!-- Dynamic content rendered by JS -->
+            </div>
+          </section>
+
+          <!-- Slide 10: 2025 Predictions -->
+          <section class="slide" data-title="2025 Predictions">
+            <div class="slide-inner">
+              <!-- Dynamic content rendered by JS -->
+            </div>
+          </section>
+
+          <!-- Slide 11: Share Your Wrap -->
+          <section class="slide" data-title="Share Your Wrap">
+            <div class="slide-inner">
+              <!-- Dynamic content rendered by JS -->
+            </div>
+          </section>
+
+          <!-- Slide 12: The End -->
+          <section class="slide" data-title="The End">
+            <div class="slide-inner">
+              <div class="ending">
+                <div class="ending-emoji">🎉</div>
+                <h2>Thanks for being a DKU Foodie!</h2>
+                <p class="ending-message">
+                  You've experienced the best of campus cuisine this year.<br>
+                  Here's to many more delicious moments ahead! 🍜✨
+                </p>
+                <div class="ending-stats">
+                  <div class="ending-stat">
+                    <div class="ending-number" id="finalMeals">—</div>
+                    <div class="ending-label">Meals Enjoyed</div>
+                  </div>
+                  <div class="ending-stat">
+                    <div class="ending-number" id="finalSpent">—</div>
+                    <div class="ending-label">Money Well Spent</div>
+                  </div>
+                  <div class="ending-stat">
+                    <div class="ending-number" id="finalPlaces">—</div>
+                    <div class="ending-label">Places Discovered</div>
+                  </div>
+                </div>
+                <div class="ending-hashtags">
+                  #DKUDiningWrapped #CampusFoodie #DKU2024
                 </div>
               </div>
             </div>

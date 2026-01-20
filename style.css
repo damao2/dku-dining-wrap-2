@@ -99,7 +99,99 @@ code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;border:1
 .details summary{cursor:pointer;color:var(--accent)}
 .details ol{margin:10px 0 0 18px}
 
+/* Entertaining Wrap Styles */
+.personality-reveal{text-align:center;padding:40px 20px}
+.big-emoji{font-size:80px;margin-bottom:20px}
+.personality-reveal h2{margin-bottom:30px;color:#e9ecf1}
+.personality-name{font-size:36px;font-weight:700;margin:20px 0;color:#7dd3fc}
+.personality-desc{font-size:18px;margin:15px 0;color:#a7b0c0}
+.personality-stats{display:flex;justify-content:center;gap:30px;margin-top:40px}
+.personality-stats .stat{background:rgba(125,211,252,.1);border:1px solid rgba(125,211,252,.3);border-radius:12px;padding:15px 20px;text-align:center;min-width:120px}
+
+.big-picture{text-align:center;padding:30px 20px}
+.big-picture h2{margin-bottom:40px}
+.big-numbers{display:flex;justify-content:center;gap:40px;margin:40px 0}
+.big-num{text-align:center}
+.big-num .number{font-size:48px;font-weight:700;color:#7dd3fc;margin-bottom:10px}
+.big-num .label{color:#a7b0c0;font-size:14px}
+.fun-facts{margin-top:50px;text-align:left;max-width:600px;margin-left:auto;margin-right:auto}
+.fun-facts h3{text-align:center;margin-bottom:20px}
+.fun-facts ul{list-style:none;padding:0}
+.fun-facts li{background:rgba(125,211,252,.1);border:1px solid rgba(125,211,252,.2);border-radius:8px;padding:15px;margin:10px 0;border-left:4px solid #7dd3fc}
+
+.timeline{padding:30px 20px}
+.timeline h2{text-align:center;margin-bottom:40px}
+.monthly-chart{display:flex;flex-direction:column;gap:15px;max-width:800px;margin:0 auto}
+.month-bar{display:flex;align-items:center;gap:15px}
+.month-label{min-width:80px;font-weight:600;color:#e9ecf1}
+.bar-container{flex:1;height:24px;background:rgba(255,255,255,.1);border-radius:12px;overflow:hidden}
+.bar{height:100%;background:linear-gradient(90deg,#7dd3fc,#a78bfa);border-radius:12px;transition:width 1s ease}
+.month-spend{min-width:80px;text-align:right;font-weight:600;color:#7dd3fc}
+
+.achievements{text-align:center;padding:30px 20px}
+.achievements h2{margin-bottom:40px}
+.achievement-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px;max-width:1000px;margin:0 auto}
+.achievement-card{background:linear-gradient(135deg,rgba(125,211,252,.1),rgba(167,139,250,.1));border:1px solid rgba(125,211,252,.3);border-radius:16px;padding:25px;text-align:center;transition:transform 0.3s ease}
+.achievement-card:hover{transform:translateY(-5px)}
+.achievement-icon{font-size:40px;margin-bottom:15px}
+.achievement-name{font-size:18px;font-weight:700;margin-bottom:8px;color:#e9ecf1}
+.achievement-desc{color:#a7b0c0;font-size:14px}
+.more-achievements{margin-top:30px;color:#a7b0c0;font-style:italic}
+
+.memories{padding:30px 20px}
+.memories h2{text-align:center;margin-bottom:40px}
+.memory-cards{display:flex;flex-direction:column;gap:20px;max-width:700px;margin:0 auto}
+.memory-card{background:linear-gradient(135deg,rgba(125,211,252,.1),rgba(167,139,250,.1));border:1px solid rgba(125,211,252,.3);border-radius:12px;padding:20px;display:flex;align-items:center;gap:15px}
+.memory-icon{font-size:30px}
+.memory-text{flex:1;color:#e9ecf1}
+
+.predictions{text-align:center;padding:40px 20px}
+.predictions h2{margin-bottom:40px}
+.crystal-ball{font-size:60px;margin:30px 0}
+.prediction-list{display:flex;flex-direction:column;gap:15px;max-width:600px;margin:0 auto}
+.prediction-item{background:linear-gradient(135deg,rgba(125,211,252,.1),rgba(167,139,250,.1));border:1px solid rgba(125,211,252,.3);border-radius:12px;padding:20px;display:flex;align-items:center;gap:15px}
+.prediction-icon{font-size:25px}
+.prediction-text{flex:1;text-align:left;color:#e9ecf1}
+
+.share-quotes{text-align:center;padding:30px 20px}
+.share-quotes h2{margin-bottom:40px}
+.quote-cards{display:flex;flex-direction:column;gap:20px;max-width:700px;margin:0 auto}
+.quote-card{background:linear-gradient(135deg,rgba(125,211,252,.1),rgba(167,139,250,.1));border:1px solid rgba(125,211,252,.3);border-radius:12px;padding:25px;cursor:pointer;transition:all 0.3s ease;text-align:left}
+.quote-card:hover{transform:translateY(-3px);border-color:#7dd3fc}
+.quote-text{font-size:18px;font-style:italic;color:#e9ecf1;margin-bottom:10px;line-height:1.4}
+.quote-action{color:#a7b0c0;font-size:14px}
+.hashtags{margin-top:40px;color:#7dd3fc;font-weight:600;font-size:16px}
+
+.money-stats{text-align:center;padding:30px 20px}
+.money-stats h3{margin-bottom:40px}
+.spending-breakdown{display:flex;justify-content:center;gap:40px}
+.spend-category{background:linear-gradient(135deg,rgba(125,211,252,.1),rgba(167,139,250,.1));border:1px solid rgba(125,211,252,.3);border-radius:16px;padding:30px;display:flex;align-items:center;gap:20px;min-width:250px}
+.category-icon{font-size:40px}
+.category-info{text-align:left}
+.category-name{color:#a7b0c0;margin-bottom:5px}
+.category-value{font-size:24px;font-weight:700;color:#7dd3fc}
+
+.comparison{text-align:center;padding:30px 20px}
+.comparison h3{margin-bottom:40px}
+.comparison-stats{display:flex;flex-direction:column;gap:20px;max-width:500px;margin:0 auto}
+.comparison-item{background:linear-gradient(135deg,rgba(125,211,252,.1),rgba(167,139,250,.1));border:1px solid rgba(125,211,252,.3);border-radius:12px;padding:20px;text-align:left}
+.comparison-label{color:#a7b0c0;margin-bottom:5px}
+.comparison-value{font-size:18px;font-weight:600;color:#e9ecf1;margin-bottom:5px}
+.comparison-percentile{color:#7dd3fc;font-weight:600}
+.comparison-note{margin-top:30px;color:#a7b0c0}
+
+.ending{text-align:center;padding:40px 20px}
+.ending-emoji{font-size:60px;margin-bottom:20px}
+.ending h2{margin-bottom:20px;color:#e9ecf1}
+.ending-message{color:#a7b0c0;margin-bottom:40px;font-size:16px;line-height:1.6}
+.ending-stats{display:flex;justify-content:center;gap:40px;margin:40px 0}
+.ending-stat{text-align:center}
+.ending-number{font-size:36px;font-weight:700;color:#7dd3fc;margin-bottom:5px}
+.ending-label{color:#a7b0c0;font-size:14px}
+.ending-hashtags{margin-top:40px;color:#7dd3fc;font-weight:600}
+
 .uploader{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.uploader-actions{margin-top:12px;text-align:center}
 .status{margin-top:10px}
 
 .wrap-shell{margin-top:10px}
