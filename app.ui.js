@@ -207,6 +207,34 @@
     if (el) el.textContent = txt;
   }
 
+  function escapeHtml(s){
+    return String(s ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/\"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function renderTopVisitsList(stats){
+    const el = document.getElementById("listTopVisits");
+    if (!el) return;
+
+    const items = Array.isArray(stats?.topVisits) ? stats.topVisits : [];
+    if (!items.length) {
+      el.innerHTML = "<li class=\"muted\">—</li>";
+      return;
+    }
+
+    el.innerHTML = items
+      .map((x) => {
+        const place = escapeHtml(x.key);
+        const visits = Number(x.value) || 0;
+        return `<li><strong>${place}</strong> — ${visits} visit${visits === 1 ? "" : "s"}</li>`;
+      })
+      .join("");
+  }
+
   function renderCharts(stats){
     chartTopSpend = destroyChart(chartTopSpend);
     chartHours = destroyChart(chartHours);
@@ -252,6 +280,8 @@
       },
       options: { responsive: true, plugins: { legend: { display: false } } }
     });
+
+    renderTopVisitsList(stats);
   }
 
   // --- Entertaining Wrap Rendering ---
