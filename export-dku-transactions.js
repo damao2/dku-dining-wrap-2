@@ -30,6 +30,18 @@
   const HANDOFF_STORAGE_KEY = "DKU_WRAP_V1";
   const HANDOFF_MAX_BYTES = 3_500_000; // keep below common window.name limits
 
+  // Some portals embed the transaction page inside frames/iframes.
+  // In that case, using `window.name` / `location.href` on the subframe may not
+  // navigate the whole tab, and the name may not persist as expected.
+  // We therefore prefer operating on the top browsing context when possible.
+  const TOP = (() => {
+    try {
+      return window.top && window.top !== window ? window.top : window;
+    } catch {
+      return window;
+    }
+  })();
+
   (async () => {
     try {
       /***********************
@@ -43,7 +55,7 @@
       const TODAY = new Date();
       TODAY.setHours(0, 0, 0, 0);
       const DEFAULT_LATEST = fmtDate(TODAY);
-      const DEFAULT_EARLIEST = fmtDate(new Date(TODAY.getFullYear() - 2, 0, 1));
+      const DEFAULT_EARLIEST = fmtDate(new Date(TODAY.getFullYear() - 1, 0, 1));
 
       const EARLIEST = String(window.__DKU_DINING_EARLIEST__ || DEFAULT_EARLIEST);
       const LATEST   = String(window.__DKU_DINING_LATEST__   || DEFAULT_LATEST);
@@ -323,9 +335,16 @@
         return;
       }
 
-      window.name = `${HANDOFF_STORAGE_KEY}:${json}`;
+      // Write to both current window and top window (best-effort)
+      try { window.name = `${HANDOFF_STORAGE_KEY}:${json}`; } catch {}
+      try { TOP.name = `${HANDOFF_STORAGE_KEY}:${json}`; } catch {}
+
       console.log("✅ Saved rows into window.name. Redirecting to DKU Dining Wrap…");
-      location.href = WRAP_URL;
+      try {
+        TOP.location.href = WRAP_URL;
+      } catch {
+        location.href = WRAP_URL;
+      }
     } catch (e) {
       console.error(e);
       alert("❌ Export failed: " + (e?.message || e));

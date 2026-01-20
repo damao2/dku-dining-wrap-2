@@ -62,11 +62,22 @@
     try {
       const json = window.name.slice(prefix.length);
       const payload = JSON.parse(json);
-      if (!payload || payload.k !== HANDOFF_STORAGE_KEY || !Array.isArray(payload.rows)) return null;
+      if (!payload || payload.k !== HANDOFF_STORAGE_KEY || !Array.isArray(payload.rows)) {
+        throw new Error("bad payload shape");
+      }
+
       // Clear immediately to avoid re-import on refresh
       window.name = "";
       return payload.rows;
-    } catch {
+    } catch (err) {
+      // Most common cause: window.name is truncated by the browser (size limits vary).
+      // In that case JSON.parse fails and we can't recover the dataset.
+      elStatus.textContent =
+        "One-click data transfer was detected but could not be read (likely too large / truncated). " +
+        "Please re-run the exporter in CSV download mode and upload the CSV here.";
+      // Clear to avoid endless failures on refresh.
+      window.name = "";
+      console.warn("window.name handoff parse failed:", err);
       return null;
     }
   }
