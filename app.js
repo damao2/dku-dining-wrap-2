@@ -8,6 +8,7 @@
 
 (() => {
   const BOOKMARKLET_SRC = "https://williamguo34.github.io/dku-dining-wrap/export-dku-transactions.js";
+  const HANDOFF_STORAGE_KEY = "DKU_WRAP_V1"; // must match exporter
 
   // --- Elements
   const elFile = document.getElementById("fileInput");
@@ -51,6 +52,24 @@
   btnPrev.addEventListener("click", () => showSlide(slideIndex - 1));
   btnNext.addEventListener("click", () => showSlide(slideIndex + 1));
   showSlide(0);
+
+  // --- One-click flow: auto import from exporter via window.name
+  function tryLoadFromWindowName() {
+    if (!window.name) return null;
+    const prefix = `${HANDOFF_STORAGE_KEY}:`;
+    if (!window.name.startsWith(prefix)) return null;
+
+    try {
+      const json = window.name.slice(prefix.length);
+      const payload = JSON.parse(json);
+      if (!payload || payload.k !== HANDOFF_STORAGE_KEY || !Array.isArray(payload.rows)) return null;
+      // Clear immediately to avoid re-import on refresh
+      window.name = "";
+      return payload.rows;
+    } catch {
+      return null;
+    }
+  }
 
   // --- Charts
   let chartTopSpend = null;
@@ -170,12 +189,31 @@
   }
 
   function spendValue(r){
-    // Unified: how much was spent (positive number)
+    // Unified: dining spend (positive number)
+    // DKU "Expense" entries usually have negative amounts.
+    // We count only negative values as spend; positive entries (refunds/adjustments) become 0 here.
     const amt = parseAmount(r.amount);
-    return (classifyRow(r) === "expense") ? Math.abs(amt) : 0;
+    return (classifyRow(r) === "expense" && amt < 0) ? (-amt) : 0;
   }
 
   function computeStats(rows){
+    const totalRows = rows.length;
+
+    // Count categories on the original dataset (before dining filter)
+    const catCounts = { dining: 0, topup: 0, printing: 0, admin: 0, expense_non_dining: 0, other: 0 };
+    for (const r of rows) {
+      const cls = classifyRow(r);
+      if (cls === "topup") catCounts.topup += 1;
+      else if (cls === "printing") catCounts.printing += 1;
+      else if (cls === "admin") catCounts.admin += 1;
+      else if (cls === "expense") {
+        if (inferIsDining(r)) catCounts.dining += 1;
+        else catCounts.expense_non_dining += 1;
+      } else {
+        catCounts.other += 1;
+      }
+    }
+
     const diningRows = rows.filter(r => inferIsDining(r));
     const txns = diningRows.length;
     const amounts = diningRows.map(r => spendValue(r));
@@ -220,7 +258,25 @@
       .map(([month, spend]) => ({month, spend}))
       .sort((a,b) => a.month.localeCompare(b.month));
 
-    return { txns, totalSpend, topSpend, topVisits, favorite, favoriteCount, peakHour, peakWeekday, hours, weekdays, months, validTime };
+    return {
+      txns,
+      totalSpend,
+      topSpend,
+      topVisits,
+      favorite,
+      favoriteCount,
+      peakHour,
+      peakWeekday,
+      hours,
+      weekdays,
+      months,
+      validTime,
+      meta: {
+        totalRows,
+        diningRows: diningRows.length,
+        catCounts,
+      }
+    };
   }
 
   function fmtMoney(x){
@@ -271,7 +327,18 @@
     setText("kpiTotalSpend", fmtMoney(stats.totalSpend));
     setText("kpiSpendSub", "Total dining spend");
     setText("kpiTxnCount", String(stats.txns));
-    setText("kpiTxnSub", stats.validTime ? `${stats.validTime} with timestamps` : "No parsable timestamps");
+    if (stats.meta?.totalRows && stats.meta.totalRows !== stats.txns) {
+      const c = stats.meta.catCounts || {};
+      const bits = [];
+      if (c.topup) bits.push(`${c.topup} top-up`);
+      if (c.printing) bits.push(`${c.printing} printing`);
+      if (c.admin) bits.push(`${c.admin} admin`);
+      if (c.expense_non_dining) bits.push(`${c.expense_non_dining} non-dining expense`);
+      const excluded = bits.length ? `Excluded: ${bits.join(", ")}` : "Excluded non-dining transactions";
+      setText("kpiTxnSub", `${stats.validTime} with timestamps • ${excluded}`);
+    } else {
+      setText("kpiTxnSub", stats.validTime ? `${stats.validTime} with timestamps` : "No parsable timestamps");
+    }
     setText("kpiFav", stats.favorite);
     setText("kpiFavSub", stats.favoriteCount ? `${stats.favoriteCount} visits` : "—");
     setText("vibeText", buildVibeText(stats));
@@ -282,6 +349,15 @@
 
     btnExportCurrent.disabled = false;
     btnExportAll.disabled = false;
+  }
+
+  function loadAndRenderRows(rows, sourceLabel){
+    const stats = computeStats(rows);
+    const diningCount = stats.txns;
+    const totalCount = stats.meta?.totalRows ?? rows.length;
+    elStatus.textContent = `${sourceLabel}: ${totalCount} rows loaded • ${diningCount} dining expenses used`;
+    renderAll(stats);
+    showSlide(0);
   }
 
   // --- Export PNG
@@ -344,10 +420,7 @@
           return;
         }
 
-        const stats = computeStats(rows);
-        elStatus.textContent = `Loaded ${rows.length} rows • Rendering…`;
-        renderAll(stats);
-        showSlide(0);
+        loadAndRenderRows(rows, "CSV");
       },
       error: (err) => {
         console.error(err);
@@ -355,5 +428,11 @@
       }
     });
   });
+
+  // Auto-import when arriving from the exporter (window.name handoff)
+  const handoffRows = tryLoadFromWindowName();
+  if (handoffRows && handoffRows.length) {
+    loadAndRenderRows(handoffRows, "One-click export");
+  }
 
 })();

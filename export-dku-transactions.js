@@ -14,20 +14,41 @@
   }
   window.__DKU_DINING_EXPORT_RUNNING__ = true;
 
+  /***********************
+   * Handoff mode
+   *
+   * By default we do NOT download a CSV.
+   * Instead we store the rows in window.name and redirect to your GitHub Pages app.
+   * This makes the user flow: (1) open Transaction History page -> (2) click bookmark -> done.
+   *
+   * If you still want the CSV download, set:
+   *   window.__DKU_DINING_EXPORT_MODE__ = "download"
+   * before running the script.
+   ***********************/
+
+  const WRAP_URL = "https://williamguo34.github.io/dku-dining-wrap/";
+  const HANDOFF_STORAGE_KEY = "DKU_WRAP_V1";
+  const HANDOFF_MAX_BYTES = 3_500_000; // keep below common window.name limits
+
   (async () => {
     try {
       /***********************
        * Config (edit here if you want defaults)
        ***********************/
-      const TODAY = new Date();                 // user's local date (browser)
-      TODAY.setHours(0, 0, 0, 0);               // avoid timezone/hour drift
+      // Defaults: scrape from Jan 1 of (currentYear - 2) to today.
+      // You can override in console before running:
+      //   window.__DKU_DINING_EARLIEST__ = "YYYY.MM.DD"
+      //   window.__DKU_DINING_LATEST__   = "YYYY.MM.DD"
+      //   window.__DKU_DINING_WINDOW_DAYS__ = 30
+      const TODAY = new Date();
+      TODAY.setHours(0, 0, 0, 0);
+      const DEFAULT_LATEST = fmtDate(TODAY);
+      const DEFAULT_EARLIEST = fmtDate(new Date(TODAY.getFullYear() - 2, 0, 1));
 
-      const LATEST = fmtDate(TODAY);            // e.g. "2026.01.20"
+      const EARLIEST = String(window.__DKU_DINING_EARLIEST__ || DEFAULT_EARLIEST);
+      const LATEST   = String(window.__DKU_DINING_LATEST__   || DEFAULT_LATEST);
+      const WINDOW_DAYS = Number(window.__DKU_DINING_WINDOW_DAYS__ || 365);
 
-      // Rule: from Jan 1 of (currentYear - 2) to today
-      const EARLIEST = fmtDate(new Date(TODAY.getFullYear() - 2, 0, 1));  // "YYYY.01.01"
-
-      const WINDOW_DAYS = 365;
       const EXPORT_FILENAME = "dku_transactions.csv";
 
       /***********************
@@ -165,8 +186,9 @@
       }
 
       async function runSearchAndWait() {
+        const pChange = waitForPdataChange();
         dtlsearch();
-        await waitForPdataChange(3000);
+        await pChange;
         // small yield helps slow browsers
         await sleep(80);
       }
@@ -269,9 +291,41 @@
 
       console.log(`\nTotal unique records: ${uniq.length}`);
 
-      const csv = toCSV(uniq);
-      downloadCSV(csv, EXPORT_FILENAME);
-      console.log(`✅ Exported ${EXPORT_FILENAME}`);
+      const mode = String(window.__DKU_DINING_EXPORT_MODE__ || "").toLowerCase();
+      const wantsDownload = mode === "download";
+
+      if (wantsDownload) {
+        const csv = toCSV(uniq);
+        downloadCSV(csv, EXPORT_FILENAME);
+        console.log(`✅ Exported ${EXPORT_FILENAME}`);
+        return;
+      }
+
+      // --- Handoff via window.name (no server, no file download)
+      // IMPORTANT: window.name has size limits (browser-dependent). If we exceed it,
+      // we fall back to CSV download.
+      const payload = {
+        k: HANDOFF_STORAGE_KEY,
+        v: 1,
+        createdAt: new Date().toISOString(),
+        rows: uniq,
+      };
+
+      const json = JSON.stringify(payload);
+      if (json.length > HANDOFF_MAX_BYTES) {
+        console.warn(`window.name payload too large (${json.length} bytes). Falling back to CSV download.`);
+        alert(
+          "Your transaction history is too large to pass via window.name.\n\n" +
+          "We will download a CSV instead. Please upload it to the DKU Dining Wrap page."
+        );
+        const csv = toCSV(uniq);
+        downloadCSV(csv, EXPORT_FILENAME);
+        return;
+      }
+
+      window.name = `${HANDOFF_STORAGE_KEY}:${json}`;
+      console.log("✅ Saved rows into window.name. Redirecting to DKU Dining Wrap…");
+      location.href = WRAP_URL;
     } catch (e) {
       console.error(e);
       alert("❌ Export failed: " + (e?.message || e));
