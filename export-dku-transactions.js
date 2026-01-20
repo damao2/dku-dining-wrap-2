@@ -19,10 +19,15 @@
       /***********************
        * Config (edit here if you want defaults)
        ***********************/
-      const EARLIEST = "2025.01.01";   // earliest date, format: YYYY.MM.DD
-      const LATEST   = "2026.01.13";   // latest date, format: YYYY.MM.DD
-      const WINDOW_DAYS = 30;          // window length in days (30 is safest)
+      const TODAY = new Date();                 // user's local date (browser)
+      TODAY.setHours(0, 0, 0, 0);               // avoid timezone/hour drift
 
+      const LATEST = fmtDate(TODAY);            // e.g. "2026.01.20"
+
+      // Rule: from Jan 1 of (currentYear - 2) to today
+      const EARLIEST = fmtDate(new Date(TODAY.getFullYear() - 2, 0, 1));  // "YYYY.01.01"
+
+      const WINDOW_DAYS = 365;
       const EXPORT_FILENAME = "dku_transactions.csv";
 
       /***********************
@@ -117,7 +122,7 @@
       /***********************
        * Robust wait: MutationObserver
        ***********************/
-      function waitForPdataChange(timeoutMs = 12000) {
+      function waitForPdataChange(timeoutMs = 3000) {
         return new Promise((resolve, reject) => {
           const target = document.querySelector("#pdata");
           if (!target) return reject(new Error("#pdata not found"));
@@ -142,7 +147,7 @@
         });
       }
 
-      async function waitForPageNo(targetPage, timeoutMs = 12000) {
+      async function waitForPageNo(targetPage, timeoutMs = 3000) {
         const start = Date.now();
         while (Date.now() - start < timeoutMs) {
           if (getCurrentPageNo() === targetPage) return true;
@@ -160,24 +165,23 @@
       }
 
       async function runSearchAndWait() {
-        const pChange = waitForPdataChange();
         dtlsearch();
-        await pChange;
+        await waitForPdataChange(3000);
         // small yield helps slow browsers
         await sleep(80);
       }
 
       async function gotoPage(p) {
-        const pChange = waitForPdataChange(10000);
+        const pChange = waitForPdataChange(3000);
         pageSubmit(String(p), "1");
         // Prefer page number check; fallback to DOM change
         const ok = await Promise.race([
-          waitForPageNo(p, 8000),
+          waitForPageNo(p, 3000),
           pChange.then(() => true)
         ]);
         if (!ok) {
           // last fallback
-          await sleep(400);
+          await sleep(200);
         }
       }
 

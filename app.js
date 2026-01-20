@@ -141,9 +141,44 @@
       .slice(0, n);
   }
 
+  // --- Row classification (filter non-dining)
+  function classifyRow(r){
+    const type = String(r.type || "").toLowerCase();
+    const service = String(r.service || "").toLowerCase();
+
+    if (type.includes("wechat top up") || type.includes("微信充值")) return "topup";
+    if (service.includes("pharos") || service.includes("printing") || service.includes("打印")) return "printing";
+    if (type.includes("social medical insurance") || service.includes("rms-")) return "admin";
+
+    if (type.includes("expense") || type.includes("消费")) return "expense";
+    return "other";
+  }
+
+  function inferIsDining(r){
+    // classify as dining if it's an expense
+    if (classifyRow(r) !== "expense") return false;
+
+    const service = String(r.service || "");
+    // Common dining stall formats: 2F-5 / 3F-3 / 1F-2
+    if (/\b[1-9]F-\d+\b/i.test(service)) return true;
+
+    // If in the future some dining halls don't have floor formats, whitelist here
+    // const wl = ["zartar", "late diner", "weigh-and-pay", "taste of the occident", "juice bar", "harbour deli", "malatang"];
+    // if (wl.some(k => service.toLowerCase().includes(k))) return true;
+
+    return false;
+  }
+
+  function spendValue(r){
+    // Unified: how much was spent (positive number)
+    const amt = parseAmount(r.amount);
+    return (classifyRow(r) === "expense") ? Math.abs(amt) : 0;
+  }
+
   function computeStats(rows){
-    const txns = rows.length;
-    const amounts = rows.map(r => parseAmount(r.amount));
+    const diningRows = rows.filter(r => inferIsDining(r));
+    const txns = diningRows.length;
+    const amounts = diningRows.map(r => spendValue(r));
     const totalSpend = amounts.reduce((a,b) => a + b, 0);
 
     const spendByService = new Map();
@@ -155,8 +190,8 @@
 
     let validTime = 0;
 
-    for (const r of rows){
-      const amt = parseAmount(r.amount);
+    for (const r of diningRows){
+      const amt = spendValue(r); // positive number spend
       const svc = String(r.service ?? "").trim() || "Unknown";
       incMap(spendByService, svc, amt);
       incMap(visitsByService, svc, 1);
@@ -234,7 +269,7 @@
 
   function renderAll(stats){
     setText("kpiTotalSpend", fmtMoney(stats.totalSpend));
-    setText("kpiSpendSub", stats.totalSpend >= 0 ? "Total (net) amount" : "Net (refunds exceed spend)");
+    setText("kpiSpendSub", "Total dining spend");
     setText("kpiTxnCount", String(stats.txns));
     setText("kpiTxnSub", stats.validTime ? `${stats.validTime} with timestamps` : "No parsable timestamps");
     setText("kpiFav", stats.favorite);
