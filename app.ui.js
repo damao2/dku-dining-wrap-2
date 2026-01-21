@@ -1041,27 +1041,89 @@
 
   // --- Export PNG
   async function exportElementAsPNG(el, filename){
-    const canvas = await html2canvas(el, { backgroundColor: null, scale: window.devicePixelRatio || 2 });
-    const a = document.createElement("a");
-    a.download = filename;
-    a.href = canvas.toDataURL("image/png");
-    a.click();
+    const rootStyle = getComputedStyle(document.documentElement);
+    const bg = (rootStyle.getPropertyValue("--bg") || "").trim() || "#0b0d12";
+
+    const container = el.closest?.(".card") || document.body;
+    const containerStyle = getComputedStyle(container);
+    const containerBgImage = (containerStyle.backgroundImage || "").trim();
+    const containerBgColor = (containerStyle.backgroundColor || "").trim() || bg;
+    const containerBgSize = (containerStyle.backgroundSize || "").trim();
+    const containerBgPos = (containerStyle.backgroundPosition || "").trim();
+    const containerBgRepeat = (containerStyle.backgroundRepeat || "").trim();
+
+    const token = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    el.dataset.exportToken = token;
+
+    try {
+      const scale = Math.max(2, window.devicePixelRatio || 2);
+      const baseOpts = {
+        backgroundColor: bg,
+        scale,
+        onclone: (doc) => {
+          const target = doc.querySelector(`[data-export-token="${token}"]`);
+          if (!target) return;
+
+          // Hide the section title ("3) Your Wrap") so the export is just the wrap itself.
+          const title = target.querySelector("h2");
+          if (title) title.style.display = "none";
+
+          // Ensure exported root has a solid, consistent backdrop.
+          // (Some browsers/html2canvas paths can wash out alpha blends.)
+          if (containerBgImage && containerBgImage !== "none") {
+            target.style.backgroundImage = containerBgImage;
+            target.style.backgroundColor = containerBgColor;
+            if (containerBgSize) target.style.backgroundSize = containerBgSize;
+            if (containerBgPos) target.style.backgroundPosition = containerBgPos;
+            if (containerBgRepeat) target.style.backgroundRepeat = containerBgRepeat;
+          } else {
+            target.style.backgroundColor = containerBgColor;
+          }
+
+          // Add export class to brighten everything for export
+          const activeSlide = target.querySelector(".slide.active");
+          if (activeSlide) {
+            activeSlide.classList.add("exporting");
+          }
+        }
+      };
+
+      let canvas;
+      try {
+        // Default renderer is usually the most reliable.
+        canvas = await html2canvas(el, baseOpts);
+      } catch {
+        // Fallback: foreignObjectRendering can help in some environments,
+        // but can also produce black renders in others.
+        canvas = await html2canvas(el, { ...baseOpts, foreignObjectRendering: true, useCORS: true });
+      }
+      const a = document.createElement("a");
+      a.download = filename;
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+    } finally {
+      delete el.dataset.exportToken;
+    }
   }
 
   btnExportCurrent.addEventListener("click", async () => {
     const active = slides.find(s => s.classList.contains("active"));
-    if (!active) return;
+    if (!active || !elWrapShell) return;
+    const exportRoot = elWrapShell.closest(".card") || elWrapShell;
     const title = active.dataset.title || `card-${slideIndex+1}`;
-    await exportElementAsPNG(active, `dku-wrap-${slideIndex+1}-${slugify(title)}.png`);
+    await exportElementAsPNG(exportRoot, `dku-wrap-${slideIndex+1}-${slugify(title)}.png`);
   });
 
   btnExportAll.addEventListener("click", async () => {
     const oldIndex = slideIndex;
+    const exportRoot = elWrapShell ? (elWrapShell.closest(".card") || elWrapShell) : null;
     for (let i = 0; i < slides.length; i++){
       showSlide(i);
       await new Promise(r => setTimeout(r, 140));
       const title = slides[i].dataset.title || `card-${i+1}`;
-      await exportElementAsPNG(slides[i], `dku-wrap-${i+1}-${slugify(title)}.png`);
+      if (exportRoot) {
+        await exportElementAsPNG(exportRoot, `dku-wrap-${i+1}-${slugify(title)}.png`);
+      }
       await new Promise(r => setTimeout(r, 120));
     }
     showSlide(oldIndex);

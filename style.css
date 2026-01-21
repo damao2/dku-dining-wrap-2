@@ -452,3 +452,100 @@ code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;border:1
   .kpi-grid{grid-template-columns:1fr}
   .grid-2{grid-template-columns:1fr}
 }
+
+/* Export mode - brighten all content for PNG export */
+.slide.exporting {
+  background: #0a0c12 !important;
+  opacity: 1 !important;
+}
+
+.slide.exporting,
+.slide.exporting * {
+  opacity: 1 !important;
+}
+
+.slide.exporting h1,
+.slide.exporting h2,
+.slide.exporting h3,
+.slide.exporting h4,
+.slide.exporting h5,
+.slide.exporting h6 {
+  color: #ffffff !important;
+}
+
+.slide.exporting .number,
+.slide.exporting .rank-value,
+.slide.exporting .kpi-value,
+.slide.exporting .rank-title,
+.slide.exporting .personality-name,
+.slide.exporting .achievement-name,
+.slide.exporting .memory-text strong {
+  color: #ffffff !important;
+}
+
+.slide.exporting .comparison-percentile,
+.slide.exporting .category-value,
+.slide.exporting .ending-number {
+  color: #7dd3fc !important;
+}
+
+.slide.exporting .muted,
+.slide.exporting .rank-sub,
+.slide.exporting .kpi-sub,
+.slide.exporting .label,
+.slide.exporting .kpi-label {
+  color: #c5cedb !important;
+}
+
+.slide.exporting p,
+.slide.exporting div,
+.slide.exporting span,
+.slide.exporting li,
+.slide.exporting strong,
+.slide.exporting b {
+  color: #e9ecf1 !important;
+}
+
+.slide.exporting .kpi,
+.slide.exporting .rank-big,
+.slide.exporting .rank-small,
+.slide.exporting .note,
+.slide.exporting .chart-panel {
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.15) !important;
+}
+
+/* Export/Print optimization - ensure high contrast and visibility */
+@media print {
+  .slide {
+    background: rgba(10,12,18,.98) !important;
+    border-color: rgba(125,211,252,.5) !important;
+  }
+  
+  .slide-inner,
+  .rank-big,
+  .rank-small,
+  .kpi,
+  .note,
+  .chart-panel {
+    opacity: 1 !important;
+  }
+  
+  body,
+  .slide,
+  h1, h2, h3, h4, h5, h6,
+  p, div, span,
+  .rank-title,
+  .rank-value,
+  .kpi-value {
+    color: #e9ecf1 !important;
+    opacity: 1 !important;
+  }
+  
+  .muted,
+  .rank-sub,
+  .kpi-sub {
+    color: #b8c2d4 !important;
+    opacity: 1 !important;
+  }
+}
