@@ -23,6 +23,35 @@ body{
   color:var(--text);
 }
 
+/* Hover emboss + glow (mouse-tracked spotlight) */
+.glow-hover{
+  position: relative;
+  transform: translateZ(0);
+  transition: transform .22s cubic-bezier(.2,.9,.2,1), border-color .22s ease, box-shadow .22s ease;
+}
+.glow-hover:hover{
+  box-shadow:
+    0 18px 60px rgba(0,0,0,.35),
+    inset 0 1px 0 rgba(255,255,255,.06),
+    inset 0 -1px 0 rgba(0,0,0,.40);
+}
+
+/* Subtle 3D tilt (Wrapped-like) */
+.tilt-hover{
+  --rx: 0deg;
+  --ry: 0deg;
+  transform-style: preserve-3d;
+}
+.tilt-hover:hover{
+  transform: perspective(900px) rotateX(var(--rx)) rotateY(var(--ry)) translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce){
+  .glow-hover{transition:none}
+  .glow-hover:hover{transform:none}
+  .tilt-hover:hover{transform:none}
+}
+
 a{color:inherit}
 
 .topbar{
@@ -59,6 +88,22 @@ a{color:inherit}
   box-shadow: 0 20px 60px rgba(0,0,0,.28);
   margin-bottom: 16px;
 }
+
+/* Apply glow to main containers */
+.card{position:relative}
+.card.glow-hover:hover{border-color: rgba(125,211,252,.28)}
+.slide.glow-hover:hover{border-color: rgba(125,211,252,.22)}
+
+/* Key inner blocks */
+.rank-big.glow-hover:hover{border-color: rgba(125,211,252,.32)}
+.rank-small.glow-hover:hover{border-color: rgba(255,255,255,.12)}
+.chart-panel.glow-hover:hover{border-color: rgba(255,255,255,.12)}
+.quote-card.glow-hover:hover{border-color: rgba(125,211,252,.28)}
+.achievement-card.glow-hover:hover{border-color: rgba(125,211,252,.28)}
+.memory-card.glow-hover:hover{border-color: rgba(125,211,252,.22)}
+.prediction-item.glow-hover:hover{border-color: rgba(125,211,252,.22)}
+.spend-category.glow-hover:hover{border-color: rgba(125,211,252,.28)}
+.comparison-item.glow-hover:hover{border-color: rgba(125,211,252,.22)}
 
 h2{margin:0 0 10px;font-size:18px}
 h3{margin:0 0 10px;font-size:16px}
@@ -217,6 +262,36 @@ code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;border:1
   transition: width .08s linear;
 }
 .progress.is-paused{opacity:.55}
+
+/* Fullscreen Wrap (only the wrap-shell goes fullscreen) */
+.wrap-shell:fullscreen,
+.wrap-shell:-webkit-full-screen{
+  display: flex;
+  flex-direction: column;
+  width: 100vw;
+  height: 100vh;
+  margin: 0;
+  padding: 12px 12px 16px;
+  background: var(--bg);
+}
+
+.wrap-shell:fullscreen .wrap-nav,
+.wrap-shell:-webkit-full-screen .wrap-nav{
+  flex: 0 0 auto;
+}
+
+.wrap-shell:fullscreen .slides,
+.wrap-shell:-webkit-full-screen .slides{
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.wrap-shell:fullscreen .slide,
+.wrap-shell:-webkit-full-screen .slide{
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+}
 
 .slides{position:relative}
 .slide{

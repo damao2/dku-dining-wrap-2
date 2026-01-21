@@ -31,6 +31,8 @@
   const btnNext = document.getElementById("btnNext");
 
   const btnPlayPause = document.getElementById("btnPlayPause");
+  const btnFullscreen = document.getElementById("btnFullscreen");
+  const elWrapShell = document.querySelector(".wrap-shell");
   const elProgressWrap = document.querySelector(".progress");
   const elProgressBar = document.getElementById("slideProgress");
 
@@ -41,6 +43,78 @@
   const btnCopyBookmarklet = document.getElementById("btnCopyBookmarklet");
   const btnLoadSample = document.getElementById("btnLoadSample");
   const btnDownloadTemplate = document.getElementById("btnDownloadTemplate");
+
+  // --- Hover glow (mouse-tracked)
+  function initGlowHover(root = document){
+    const selectors = [
+      ".card",
+      ".chart-panel",
+      ".kpi",
+      ".personality-stats .stat",
+      ".big-num",
+      ".note",
+      ".rank-big",
+      ".rank-small",
+      ".quote-card",
+      ".achievement-card",
+      ".memory-card",
+      ".prediction-item",
+      ".spend-category",
+      ".comparison-item",
+    ];
+
+    const tiltSelectors = [
+      // Tilt all boxed mini-panels (NOT whole slides/outer cards)
+      ".chart-panel",
+      ".kpi",
+      ".personality-stats .stat",
+      ".big-num",
+      ".note",
+      ".rank-big",
+      ".rank-small",
+      ".quote-card",
+      ".achievement-card",
+      ".memory-card",
+      ".prediction-item",
+      ".spend-category",
+      ".comparison-item",
+    ];
+
+    // Tune tilt strength here
+    const MAX_RY_DEG = 4; // left/right
+    const MAX_RX_DEG = 3; // up/down
+
+    const nodes = root.querySelectorAll(selectors.join(","));
+    nodes.forEach((el) => {
+      if (!el || el.dataset.glowInit === "1") return;
+      el.dataset.glowInit = "1";
+      el.classList.add("glow-hover");
+
+      const shouldTilt = tiltSelectors.some((sel) => el.matches(sel));
+      if (shouldTilt) el.classList.add("tilt-hover");
+
+      if (!shouldTilt) return;
+
+      el.addEventListener("pointermove", (e) => {
+        const r = el.getBoundingClientRect();
+        const px = (e.clientX - r.left) / Math.max(1, r.width);   // 0..1
+        const py = (e.clientY - r.top) / Math.max(1, r.height);  // 0..1
+        const x = (px - 0.5); // -0.5..0.5
+        const y = (py - 0.5); // -0.5..0.5
+
+        // Keep tilt subtle (Wrapped-like, not gimmicky)
+        const ry = (x * MAX_RY_DEG);   // deg
+        const rx = (-y * MAX_RX_DEG);  // deg
+        el.style.setProperty("--rx", `${rx.toFixed(2)}deg`);
+        el.style.setProperty("--ry", `${ry.toFixed(2)}deg`);
+      }, { passive: true });
+
+      el.addEventListener("pointerleave", () => {
+        el.style.setProperty("--rx", "0deg");
+        el.style.setProperty("--ry", "0deg");
+      });
+    });
+  }
 
   // Sample data
   const SAMPLE_DATA = `dateTime,type,txn,service,amount,status
@@ -152,6 +226,59 @@
     a.download = "dku-transactions-template.csv";
     a.click();
   });
+
+  // --- Fullscreen (Wrap only)
+  function getFullscreenElement(){
+    return document.fullscreenElement || document.webkitFullscreenElement || null;
+  }
+
+  function supportsFullscreen(){
+    if (!elWrapShell) return false;
+    return Boolean(
+      elWrapShell.requestFullscreen ||
+      elWrapShell.webkitRequestFullscreen ||
+      document.exitFullscreen ||
+      document.webkitExitFullscreen
+    );
+  }
+
+  function syncFullscreenUI(){
+    if (!btnFullscreen) return;
+    const isFs = Boolean(getFullscreenElement());
+    btnFullscreen.textContent = isFs ? "Exit" : "Fullscreen";
+    btnFullscreen.setAttribute("aria-label", isFs ? "Exit fullscreen" : "Enter fullscreen");
+  }
+
+  async function toggleFullscreen(){
+    if (!btnFullscreen || !elWrapShell) return;
+    if (!supportsFullscreen()) {
+      alert("Fullscreen is not supported in this browser.");
+      return;
+    }
+
+    const cur = getFullscreenElement();
+    try {
+      if (cur) {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+      } else {
+        if (elWrapShell.requestFullscreen) await elWrapShell.requestFullscreen();
+        else if (elWrapShell.webkitRequestFullscreen) elWrapShell.webkitRequestFullscreen();
+      }
+    } finally {
+      syncFullscreenUI();
+      // Nudge layout observers (Chart.js responsive resize)
+      setTimeout(() => window.dispatchEvent(new Event("resize")), 80);
+    }
+  }
+
+  if (btnFullscreen) {
+    btnFullscreen.addEventListener("click", () => toggleFullscreen());
+    if (!supportsFullscreen()) btnFullscreen.disabled = true;
+  }
+
+  document.addEventListener("fullscreenchange", syncFullscreenUI);
+  document.addEventListener("webkitfullscreenchange", syncFullscreenUI);
 
   // --- Slide navigation
   let slideIndex = 0;
@@ -283,6 +410,8 @@
     btnPrev.disabled = slideIndex === 0;
     btnNext.disabled = slideIndex === slides.length - 1;
     triggerEnterAnimation(slides[slideIndex]);
+    // ensure dynamically rendered blocks get hover glow
+    initGlowHover(slides[slideIndex]);
   }
 
   btnPrev.addEventListener("click", () => {
@@ -890,6 +1019,9 @@
 
     // Render charts for remaining slides (compatibility)
     renderCharts(stats);
+
+    // Enable hover glow for newly rendered nodes
+    initGlowHover(document);
 
     // Start autoplay once we have real content.
     startAuto();
