@@ -100,11 +100,25 @@
 
     let validTime = 0;
 
+    // Date-derived metrics (only from dining rows with parseable dateTime)
+    let earliest = null; // { d: Date, row, spend }
+    let latest = null;   // { d: Date, row, spend }
+    let mostExpensive = null; // { d: Date|null, row, spend }
+    const byDay = new Map(); // YYYY-MM-DD -> { day, count, spend }
+
+    function fmtYMD(d){
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+    }
+
     for (const r of diningRows){
       const amt = spendValue(r); // positive number spend
       const svc = String(r.service ?? "").trim() || "Unknown";
       incMap(spendByService, svc, amt);
       incMap(visitsByService, svc, 1);
+
+      if (!mostExpensive || amt > mostExpensive.spend) {
+        mostExpensive = { d: null, row: r, spend: amt };
+      }
 
       const d = parseDateTime(r.dateTime);
       if (d){
@@ -114,6 +128,21 @@
 
         const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
         incMap(spendByMonth, ym, amt);
+
+        const ymd = fmtYMD(d);
+        const prev = byDay.get(ymd) || { day: ymd, count: 0, spend: 0 };
+        prev.count += 1;
+        prev.spend += amt;
+        byDay.set(ymd, prev);
+
+        if (!earliest || d.getTime() < earliest.d.getTime()) earliest = { d, row: r, spend: amt };
+        if (!latest || d.getTime() > latest.d.getTime()) latest = { d, row: r, spend: amt };
+        if (mostExpensive && (!mostExpensive.d || amt === mostExpensive.spend)) {
+          // Keep the date for the most expensive record if available
+          if (!mostExpensive.d || d.getTime() < mostExpensive.d.getTime()) {
+            mostExpensive.d = d;
+          }
+        }
       }
     }
 
@@ -130,9 +159,30 @@
       .map(([month, spend]) => ({month, spend}))
       .sort((a,b) => a.month.localeCompare(b.month));
 
+    const uniquePlaces = visitsByService.size;
+
+    const days = Array.from(byDay.values()).sort((a,b) => a.day.localeCompare(b.day));
+    const busiestDay = days.reduce((best, cur) => {
+      if (!best) return cur;
+      if (cur.count > best.count) return cur;
+      if (cur.count === best.count && cur.spend > best.spend) return cur;
+      return best;
+    }, null);
+
+    const activeDays = days.length;
+    const activeMonths = months.length;
+
+    const topMonth = months.reduce((best, cur) => {
+      if (!best) return cur;
+      return cur.spend > best.spend ? cur : best;
+    }, null);
+
+    const avgMealCost = totalSpend / Math.max(1, txns);
+
     return {
       txns,
       totalSpend,
+      avgMealCost,
       topSpend,
       topVisits,
       favorite,
@@ -142,6 +192,15 @@
       hours,
       weekdays,
       months,
+      topMonth,
+      uniquePlaces,
+      days,
+      busiestDay,
+      earliest,
+      latest,
+      mostExpensive,
+      activeDays,
+      activeMonths,
       validTime,
       meta: {
         totalRows,
@@ -174,15 +233,15 @@
     if (hour >= 19 && hour <= 19.5) return { name: "⏰ Last Call Hero", desc: "You time it perfectly with closing!" };
 
     // Frequency-based personality
-    if (favoriteCount > 50) return { name: "🏠 Home Base Hero", desc: "Loyalty to your favorite spot!" };
-    if (stats.topVisits.length >= 10) return { name: "🎯 Location Hopper", desc: "You like to explore the menu!" };
+    if (favoriteCount >= 50) return { name: "🏠 Home Base Hero", desc: "You keep coming back to the same favorite spot." };
+    if ((stats.uniquePlaces || 0) >= 10) return { name: "🎯 Location Hopper", desc: "You explore lots of different spots." };
 
     // Day-based personality
     if (weekday === "Fri" || weekday === "Sat") return { name: "🎉 Weekend Warrior", desc: "Dining is your weekend ritual!" };
     if (weekday === "Mon") return { name: "📚 Monday Motivator", desc: "Starting the week with good food!" };
 
     // Default personality
-    return { name: "🍜 DKU Foodie", desc: "You're all about that campus life!" };
+    return { name: "🍜 DKU Foodie", desc: "You keep campus dining interesting." };
   }
 
   function calculateAchievements(stats) {
@@ -203,21 +262,22 @@
     // Last call achievement (right before closing)
     if (peakHour >= 19 && peakHour <= 19.5) achievements.push({ icon: "⏰", name: "Last Call", desc: "Timing it perfectly with closing!" });
 
-    // Loyalty achievements
-    if (stats.favoriteCount >= 50) achievements.push({ icon: "💎", name: "Loyal Legend", desc: "100+ visits to one spot" });
-    if (stats.favoriteCount >= 100) achievements.push({ icon: "👑", name: "Crown Jewel", desc: "200+ visits - you're basically family!" });
+    // Loyalty achievements (thresholds match descriptions)
+    if (stats.favoriteCount >= 25) achievements.push({ icon: "💎", name: "Loyal Legend", desc: "25+ visits to your #1 spot" });
+    if (stats.favoriteCount >= 50) achievements.push({ icon: "👑", name: "Crown Jewel", desc: "50+ visits — you basically have a reserved seat" });
 
-    // Exploration achievements
-    if (stats.topVisits.length >= 10) achievements.push({ icon: "🗺️", name: "Campus Explorer", desc: "Visited 10+ dining spots" });
-    if (stats.topVisits.length >= 15) achievements.push({ icon: "🧭", name: "Food Cartographer", desc: "Mapped the entire campus!" });
+    // Exploration achievements (use uniquePlaces; topVisits is capped to top-N)
+    if ((stats.uniquePlaces || 0) >= 8) achievements.push({ icon: "🗺️", name: "Campus Explorer", desc: "Visited 8+ different spots" });
+    if ((stats.uniquePlaces || 0) >= 12) achievements.push({ icon: "🧭", name: "Food Cartographer", desc: "Visited 12+ different spots" });
 
     // Spending achievements
     if (stats.totalSpend >= 2000) achievements.push({ icon: "💰", name: "Big Spender", desc: "¥2000+ invested in dining" });
     if (stats.totalSpend >= 5000) achievements.push({ icon: "🏦", name: "Dining Investor", desc: "¥5000+ - you fund the campus!" });
 
     // Consistency achievements
-    const monthlyAvg = stats.txns / Math.max(1, stats.months.length);
-    if (monthlyAvg >= 30) achievements.push({ icon: "📅", name: "Regular Customer", desc: "30+ meals per month" });
+    const activeMonths = Math.max(1, stats.activeMonths || stats.months.length || 1);
+    const monthlyAvg = stats.txns / activeMonths;
+    if (monthlyAvg >= 25) achievements.push({ icon: "📅", name: "Regular Customer", desc: "25+ meals per active month" });
 
     // Special achievements - meal period focus
     const breakfastMeals = stats.hours.filter(h => h.hour >= 7 && h.hour <= 9).reduce((sum, h) => sum + h.count, 0);
@@ -232,36 +292,39 @@
   }
 
   function generateFunComparisons(stats) {
-    const comparisons = [];
-    const spend = stats.totalSpend;
+    // Keep this strictly data-based (no assumptions about prices/time/other students)
+    const facts = [];
     const txns = stats.txns;
+    const spend = stats.totalSpend;
 
-    // Food equivalents
-    const ramenBowls = Math.floor(spend / 25);
-    if (ramenBowls > 0) comparisons.push(`You've bought enough ramen for ${ramenBowls} bowls! 🍜`);
+    if (stats.uniquePlaces) facts.push(`You visited ${stats.uniquePlaces} unique dining spots.`);
+    if (stats.favorite && stats.favorite !== "—") {
+      const pct = txns ? Math.round((stats.favoriteCount / txns) * 100) : 0;
+      facts.push(`${stats.favorite} is your #1: ${stats.favoriteCount} visits (${pct}% of your meals).`);
+    }
 
-    const bubbleTea = Math.floor(spend / 15);
-    if (bubbleTea > 0) comparisons.push(`That's ${bubbleTea} bubble teas worth of spending! 🧋`);
+    const peakHourCount = stats.hours?.[stats.peakHour.hour]?.count || 0;
+    facts.push(`Peak time: ${String(stats.peakHour.hour).padStart(2, "0")}:00 (${peakHourCount} meals).`);
+    facts.push(`Favorite day: ${stats.peakWeekday.day}.`);
 
-    const pizzas = Math.floor(spend / 45);
-    if (pizzas > 0) comparisons.push(`You could buy ${pizzas} large pizzas with your dining budget! 🍕`);
+    if (Number.isFinite(stats.avgMealCost)) {
+      facts.push(`Average meal: ¥${fmtMoney(stats.avgMealCost)}.`);
+    }
 
-    // Time equivalents
-    const studyHours = Math.floor(txns * 0.5); // Assuming 30min per meal
-    comparisons.push(`You've spent about ${studyHours} hours dining this year!`);
+    if (stats.topMonth?.month) {
+      facts.push(`Your biggest month: ${stats.topMonth.month} (¥${fmtMoney(stats.topMonth.spend)}).`);
+    }
 
-    // DKU-themed comparisons
-    const libraryVisits = Math.floor(txns / 10);
-    comparisons.push(`If dining spots were libraries, you've visited ${libraryVisits} times more than most students study! 📚`);
+    if (stats.activeDays) {
+      const perActiveDay = stats.activeDays ? (txns / stats.activeDays) : 0;
+      facts.push(`You ate on ${stats.activeDays} different days (${perActiveDay.toFixed(2)} meals/day when active).`);
+    }
 
-    // Cafeteria-specific insights
-    const breakfastMeals = stats.hours.filter(h => h.hour >= 7 && h.hour <= 9).reduce((sum, h) => sum + h.count, 0);
-    const dinnerMeals = stats.hours.filter(h => h.hour >= 17 && h.hour <= 19.5).reduce((sum, h) => sum + h.count, 0);
+    // “Spicy but safe” comment (still based on data)
+    if (stats.favoriteCount >= 40) facts.push("Do you live at your #1 spot? 👑");
+    else if (stats.uniquePlaces >= 12) facts.push("You really said: variety is the spice of life. 🗺️");
 
-    if (breakfastMeals > 0) comparisons.push(`You've beaten the breakfast rush ${breakfastMeals} times! 🏃‍♂️`);
-    if (dinnerMeals > 0) comparisons.push(`You've conquered dinner hour ${dinnerMeals} times! 👑`);
-
-    return comparisons;
+    return facts;
   }
 
   function predictFutureHabits(stats) {
@@ -277,14 +340,16 @@
       const recentAvg = recentMonths.reduce((sum, m) => sum + m.spend, 0) / recentMonths.length;
       const olderAvg = olderMonths.reduce((sum, m) => sum + m.spend, 0) / olderMonths.length;
 
-      const growthRate = ((recentAvg - olderAvg) / olderAvg) * 100;
-      if (growthRate > 20) predictions.push("📈 Your spending is trending upward - watch that wallet!");
-      if (growthRate < -20) predictions.push("📉 Getting more budget-conscious? Keep it up!");
+      if (olderAvg > 0) {
+        const growthRate = ((recentAvg - olderAvg) / olderAvg) * 100;
+        if (growthRate > 20) predictions.push("📈 Recent months are trending higher than earlier months.");
+        if (growthRate < -20) predictions.push("📉 Recent months are trending lower than earlier months.");
+      }
     }
 
-    // Location predictions
-    if (stats.favoriteCount > 30) {
-      predictions.push(`🏆 ${stats.favorite} might name a dish after you soon!`);
+    // Habit hints (data-based)
+    if (stats.favoriteCount >= 30 && stats.favorite && stats.favorite !== "—") {
+      predictions.push(`🏠 You’re very consistent — ${stats.favorite} is clearly your home base.`);
     }
 
     // Time predictions - cafeteria specific
@@ -297,10 +362,6 @@
       predictions.push("🌅 Early bird habits will serve you well!");
     }
 
-    // Fun predictions
-    predictions.push("🔮 Next year you'll discover at least 2 new favorite spots!");
-    predictions.push("🎯 Your dining game will reach legendary status!");
-
     return predictions;
   }
 
@@ -308,13 +369,13 @@
     const quotes = [];
     const personality = getDiningPersonality(stats);
 
-    quotes.push(`"I am a ${personality.name} at DKU! ${personality.desc}"`);
+    quotes.push(`I am a ${personality.name} at DKU! ${personality.desc}`);
 
     if (stats.favorite) {
-      quotes.push(`"My heart belongs to ${stats.favorite} - ${stats.favoriteCount} visits and counting!"`);
+      quotes.push(`My heart belongs to ${stats.favorite} — ${stats.favoriteCount} visits and counting.`);
     }
 
-    quotes.push(`"This year I invested ¥${fmtMoney(stats.totalSpend)} in campus cuisine! 🍽️"`);
+    quotes.push(`This year I spent ¥${fmtMoney(stats.totalSpend)} on campus dining. 🍽️`);
 
     const peakHour = stats.peakHour;
     let mealPeriod = "off-hours";
@@ -322,10 +383,10 @@
     else if (peakHour.hour >= 11 && peakHour.hour <= 13.5) mealPeriod = "lunch rush";
     else if (peakHour.hour >= 17 && peakHour.hour <= 19.5) mealPeriod = "dinner rush";
 
-    quotes.push(`"My peak dining hour is ${peakHour.hour}:00 during the ${mealPeriod} - perfect timing!"`);
+    quotes.push(`My peak dining hour is ${peakHour.hour}:00 (the ${mealPeriod}).`);
 
     const peakWeekday = stats.peakWeekday;
-    quotes.push(`"${peakWeekday.day} is my dining day - I eat like it's going out of style!"`);
+    quotes.push(`${peakWeekday.day} is my dining day.`);
 
     return quotes;
   }
@@ -333,10 +394,25 @@
   function getMemoryHighlights(stats) {
     const memories = [];
 
-    // First meal
-    if (stats.months.length > 0) {
-      const firstMonth = stats.months[0];
-      memories.push(`Your dining journey began in ${firstMonth.month} with ¥${fmtMoney(firstMonth.spend)} spent!`);
+    // Time anchors (only if we can parse dateTime)
+    if (stats.earliest?.d && stats.earliest?.row) {
+      const svc = String(stats.earliest.row.service ?? "Unknown");
+      memories.push(`Earliest meal: ${stats.earliest.d.toLocaleString()} (${svc}). ☀️`);
+    }
+
+    if (stats.latest?.d && stats.latest?.row) {
+      const svc = String(stats.latest.row.service ?? "Unknown");
+      memories.push(`Latest meal: ${stats.latest.d.toLocaleString()} (${svc}). 🌙`);
+    }
+
+    if (stats.busiestDay?.day) {
+      memories.push(`Busiest day: ${stats.busiestDay.day} — ${stats.busiestDay.count} meals. 🔥`);
+    }
+
+    if (stats.mostExpensive?.spend && stats.mostExpensive?.row) {
+      const svc = String(stats.mostExpensive.row.service ?? "Unknown");
+      const when = stats.mostExpensive.d ? stats.mostExpensive.d.toLocaleString() : "(time unknown)";
+      memories.push(`Most expensive meal: ¥${fmtMoney(stats.mostExpensive.spend)} at ${svc} on ${when}. 🤑`);
     }
 
     // Meal period insights
@@ -344,17 +420,12 @@
     const lunchMeals = stats.hours.filter(h => h.hour >= 11 && h.hour <= 13.5).reduce((sum, h) => sum + h.count, 0);
     const dinnerMeals = stats.hours.filter(h => h.hour >= 17 && h.hour <= 19.5).reduce((sum, h) => sum + h.count, 0);
 
-    if (breakfastMeals > 0) memories.push(`You've started your day right with ${breakfastMeals} breakfast visits! 🌅`);
-    if (lunchMeals > 0) memories.push(`${lunchMeals} lunches fueled your academic journey! 🌞`);
-    if (dinnerMeals > 0) memories.push(`${dinnerMeals} dinners capped off your busy days! 🍽️`);
+    if (breakfastMeals > 0) memories.push(`${breakfastMeals} breakfasts — early bird energy. 🌅`);
+    if (lunchMeals > 0) memories.push(`${lunchMeals} lunches — the classic grind fuel. 🌞`);
+    if (dinnerMeals > 0) memories.push(`${dinnerMeals} dinners — end-of-day recharge. 🍽️`);
 
-    // Most expensive meal estimate
-    const avgMealCost = stats.totalSpend / Math.max(1, stats.txns);
-    memories.push(`Your average meal costs ¥${fmtMoney(avgMealCost)} - every bite worth it!`);
-
-    // Streak analysis (simplified)
-    if (stats.favoriteCount > 10) {
-      memories.push(`You had a ${Math.floor(stats.favoriteCount / 7)}-week streak of visiting ${stats.favorite}!`);
+    if (Number.isFinite(stats.avgMealCost)) {
+      memories.push(`Average meal: ¥${fmtMoney(stats.avgMealCost)}.`);
     }
 
     return memories;

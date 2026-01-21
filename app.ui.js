@@ -30,6 +30,10 @@
   const btnPrev = document.getElementById("btnPrev");
   const btnNext = document.getElementById("btnNext");
 
+  const btnPlayPause = document.getElementById("btnPlayPause");
+  const elProgressWrap = document.querySelector(".progress");
+  const elProgressBar = document.getElementById("slideProgress");
+
   const btnExportCurrent = document.getElementById("btnExportCurrent");
   const btnExportAll = document.getElementById("btnExportAll");
 
@@ -151,15 +155,148 @@
 
   // --- Slide navigation
   let slideIndex = 0;
+  const AUTO_MS = 6500;
+  const AUTO_RESUME_AFTER_USER_MS = 12000;
+
+  let hardPaused = false;     // user pressed pause
+  let softPaused = false;     // temporary pause after user navigation
+  let resumeTimer = null;
+  let advanceTimer = null;
+  let rafId = null;
+  let slideStartTs = 0;
+  let slideDurationMs = AUTO_MS;
+  let slideElapsedWhenPaused = 0;
+
+  function setProgress(pct){
+    if (!elProgressBar) return;
+    const clamped = Math.max(0, Math.min(100, pct));
+    elProgressBar.style.width = `${clamped}%`;
+  }
+
+  function clearAdvance(){
+    if (advanceTimer) {
+      clearTimeout(advanceTimer);
+      advanceTimer = null;
+    }
+  }
+
+  function clearResume(){
+    if (resumeTimer) {
+      clearTimeout(resumeTimer);
+      resumeTimer = null;
+    }
+  }
+
+  function setProgressPausedUI(isPaused){
+    if (!elProgressWrap) return;
+    elProgressWrap.classList.toggle("is-paused", isPaused);
+  }
+
+  function scheduleAdvance(durationMs){
+    clearAdvance();
+    slideDurationMs = durationMs;
+    slideStartTs = performance.now();
+    slideElapsedWhenPaused = 0;
+    setProgress(0);
+    setProgressPausedUI(false);
+
+    if (hardPaused || softPaused) return;
+
+    advanceTimer = setTimeout(() => {
+      showSlide((slideIndex + 1) % slides.length);
+      scheduleAdvance(AUTO_MS);
+    }, durationMs);
+  }
+
+  function tickProgress(){
+    if (!elProgressBar) return;
+    rafId = requestAnimationFrame(tickProgress);
+    if (hardPaused || softPaused) return;
+
+    if (!slideStartTs) return;
+    const now = performance.now();
+    const elapsed = now - slideStartTs;
+    const pct = (elapsed / Math.max(1, slideDurationMs)) * 100;
+    setProgress(pct);
+  }
+
+  function startAuto(){
+    // Starts (or restarts) autoplay from a fresh slide duration.
+    clearResume();
+    softPaused = false;
+    if (!rafId) tickProgress();
+    if (!hardPaused) scheduleAdvance(AUTO_MS);
+  }
+
+  function softPauseAndResume(){
+    if (hardPaused) return;
+    softPaused = true;
+    clearAdvance();
+    setProgress(0);
+    setProgressPausedUI(true);
+    clearResume();
+    resumeTimer = setTimeout(() => {
+      softPaused = false;
+      startAuto();
+    }, AUTO_RESUME_AFTER_USER_MS);
+  }
+
+  function togglePause(){
+    hardPaused = !hardPaused;
+    if (btnPlayPause) btnPlayPause.textContent = hardPaused ? "Play" : "Pause";
+
+    if (hardPaused) {
+      // Freeze progress at current %.
+      if (slideStartTs) {
+        slideElapsedWhenPaused = Math.min(slideDurationMs, performance.now() - slideStartTs);
+      }
+      clearAdvance();
+      clearResume();
+      setProgressPausedUI(true);
+      return;
+    }
+
+    // Resume from where we paused.
+    softPaused = false;
+    const remaining = Math.max(0, slideDurationMs - slideElapsedWhenPaused);
+    slideStartTs = performance.now() - slideElapsedWhenPaused;
+    setProgressPausedUI(false);
+    clearAdvance();
+    advanceTimer = setTimeout(() => {
+      showSlide((slideIndex + 1) % slides.length);
+      scheduleAdvance(AUTO_MS);
+    }, remaining);
+  }
+
+  function triggerEnterAnimation(activeSlide){
+    if (!activeSlide) return;
+    activeSlide.classList.remove("enter");
+    // force reflow so animation retriggers
+    void activeSlide.offsetWidth;
+    activeSlide.classList.add("enter");
+  }
+
   function showSlide(i){
     slideIndex = Math.max(0, Math.min(slides.length - 1, i));
     slides.forEach((s, idx) => s.classList.toggle("active", idx === slideIndex));
     elPager.textContent = `Card ${slideIndex + 1} / ${slides.length} • ${slides[slideIndex].dataset.title || ""}`;
     btnPrev.disabled = slideIndex === 0;
     btnNext.disabled = slideIndex === slides.length - 1;
+    triggerEnterAnimation(slides[slideIndex]);
   }
-  btnPrev.addEventListener("click", () => showSlide(slideIndex - 1));
-  btnNext.addEventListener("click", () => showSlide(slideIndex + 1));
+
+  btnPrev.addEventListener("click", () => {
+    showSlide(slideIndex - 1);
+    softPauseAndResume();
+  });
+  btnNext.addEventListener("click", () => {
+    showSlide(slideIndex + 1);
+    softPauseAndResume();
+  });
+
+  if (btnPlayPause) {
+    btnPlayPause.addEventListener("click", () => togglePause());
+  }
   showSlide(0);
 
   // --- One-click flow: auto import from exporter via window.name
@@ -216,23 +353,72 @@
       .replace(/'/g, "&#39;");
   }
 
-  function renderTopVisitsList(stats){
-    const el = document.getElementById("listTopVisits");
+  function renderRankBlock(elId, items, opts){
+    const el = document.getElementById(elId);
     if (!el) return;
 
-    const items = Array.isArray(stats?.topVisits) ? stats.topVisits : [];
-    if (!items.length) {
-      el.innerHTML = "<li class=\"muted\">—</li>";
+    const safeItems = Array.isArray(items) ? items : [];
+    if (!safeItems.length) {
+      el.innerHTML = `<div class="muted">—</div>`;
       return;
     }
 
-    el.innerHTML = items
-      .map((x) => {
-        const place = escapeHtml(x.key);
-        const visits = Number(x.value) || 0;
-        return `<li><strong>${place}</strong> — ${visits} visit${visits === 1 ? "" : "s"}</li>`;
-      })
-      .join("");
+    const total = Number(opts?.total) || 0;
+    const kind = opts?.kind || "count"; // "count" | "money"
+
+    function fmtVal(v){
+      const n = Number(v) || 0;
+      if (kind === "money") return `¥${escapeHtml(fmtMoney(n))}`;
+      return `${n} visit${n === 1 ? "" : "s"}`;
+    }
+
+    function fmtShare(v){
+      const n = Number(v) || 0;
+      if (!total) return "—";
+      return `${Math.round((n / total) * 100)}%`;
+    }
+
+    const top = safeItems[0];
+    const rest = safeItems.slice(1, 5);
+
+    let spicy = "";
+    if (opts?.spicy && kind === "count") {
+      const share = total ? (Number(top.value) / total) : 0;
+      if (Number(top.value) >= 15 && share >= 0.45) spicy = "Do you live here? 👑";
+      else if (Number(top.value) >= 10) spicy = "Main character energy.";
+    }
+
+    const shareLabel = kind === "money" ? "Share of your spend" : "Share of your meals";
+
+    el.innerHTML = `
+      <div class="rank-big">
+        <div class="rank-banner">
+          <div class="rank-banner-left">
+            <div class="rank-title rank-title-big"><span class="rank-dot">1</span>${escapeHtml(top.key)}</div>
+            <div class="rank-sub">${escapeHtml(shareLabel)}: <b>${escapeHtml(fmtShare(top.value))}</b>${spicy ? ` • ${escapeHtml(spicy)}` : ""}</div>
+          </div>
+          <div class="rank-banner-right">
+            <div class="rank-value rank-value-big">${fmtVal(top.value)}</div>
+          </div>
+        </div>
+      </div>
+      <div class="rank-smalls rank-smalls-vert">
+        ${rest.map((x, idx) => `
+          <div class="rank-small">
+            <div class="rank-row">
+              <div class="rank-title"><span class="rank-dot">${idx + 2}</span>${escapeHtml(x.key)}</div>
+              <div class="rank-value">${fmtVal(x.value)}</div>
+            </div>
+            <div class="rank-sub">${escapeHtml(fmtShare(x.value))} of your ${kind === "money" ? "spend" : "meals"}</div>
+          </div>
+        `).join("")}
+      </div>
+    `;
+  }
+
+  function renderLocationLegends(stats){
+    renderRankBlock("rankSpend", stats?.topSpend, { kind: "money", total: stats?.totalSpend });
+    renderRankBlock("rankVisits", stats?.topVisits, { kind: "count", total: stats?.txns, spicy: true });
   }
 
   function renderCharts(stats){
@@ -241,61 +427,38 @@
     chartWeekdays = destroyChart(chartWeekdays);
     chartMonths = destroyChart(chartMonths);
 
-    const topSpendLabels = stats.topSpend.map(x => x.key);
-    const topSpendValues = stats.topSpend.map(x => x.value);
-
-    chartTopSpend = new Chart(document.getElementById("chartTopSpend"), {
-      type: "bar",
-      data: { labels: topSpendLabels, datasets: [{ label: "Spend", data: topSpendValues }] },
-      options: {
-        responsive: true,
-        plugins: { legend: { display: false } },
-        scales: { x: { ticks: { maxRotation: 30, minRotation: 0 } } }
-      }
-    });
-
-    chartHours = new Chart(document.getElementById("chartHours"), {
+    const elHours = document.getElementById("chartHours");
+    if (elHours) {
+      chartHours = new Chart(elHours, {
       type: "bar",
       data: {
         labels: stats.hours.map(h => String(h.hour).padStart(2,"0")),
         datasets: [{ label: "Txns", data: stats.hours.map(h => h.count) }]
       },
-      options: { responsive: true, plugins: { legend: { display: false } } }
-    });
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+    }
 
-    chartWeekdays = new Chart(document.getElementById("chartWeekdays"), {
+    const elWeekdays = document.getElementById("chartWeekdays");
+    if (elWeekdays) {
+      chartWeekdays = new Chart(elWeekdays, {
       type: "bar",
       data: {
         labels: stats.weekdays.map(w => w.day),
         datasets: [{ label: "Txns", data: stats.weekdays.map(w => w.count) }]
       },
-      options: { responsive: true, plugins: { legend: { display: false } } }
-    });
-
-    chartMonths = new Chart(document.getElementById("chartMonths"), {
-      type: "line",
-      data: {
-        labels: stats.months.map(m => m.month),
-        datasets: [{ label: "Spend", data: stats.months.map(m => m.spend) }]
-      },
-      options: { responsive: true, plugins: { legend: { display: false } } }
-    });
-
-    renderTopVisitsList(stats);
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+      });
+    }
   }
 
   // --- Entertaining Wrap Rendering ---
 
   function animateIn(element, delay = 0) {
+    if (!element) return;
+    element.classList.add("reveal");
     setTimeout(() => {
-      element.style.opacity = '0';
-      element.style.transform = 'translateY(20px)';
-      element.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
-
-      requestAnimationFrame(() => {
-        element.style.opacity = '1';
-        element.style.transform = 'translateY(0)';
-      });
+      element.classList.add("reveal-in");
     }, delay);
   }
 
@@ -332,6 +495,10 @@
     const comparisons = generateFunComparisons(stats);
     const content = slide.querySelector('.slide-inner');
 
+    const activeMonths = Math.max(1, stats.activeMonths || stats.months.length || 1);
+    const mealsPerMonth = stats.txns / activeMonths;
+    const uniquePlaces = stats.uniquePlaces || stats.topVisits.length;
+
     content.innerHTML = `
       <div class="big-picture">
         <h2>This Year in Bites</h2>
@@ -345,11 +512,33 @@
             <div class="label">Total Spent</div>
           </div>
         </div>
+        <div class="kpi-grid" style="max-width:760px;margin:18px auto 0">
+          <div class="kpi">
+            <div class="kpi-label">Average meal</div>
+            <div class="kpi-value">¥${fmtMoney(stats.avgMealCost)}</div>
+            <div class="kpi-sub muted">Based on ${stats.txns} dining expenses</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Unique spots</div>
+            <div class="kpi-value">${uniquePlaces}</div>
+            <div class="kpi-sub muted">Different dining services visited</div>
+          </div>
+          <div class="kpi">
+            <div class="kpi-label">Pace</div>
+            <div class="kpi-value">${mealsPerMonth.toFixed(1)}</div>
+            <div class="kpi-sub muted">Meals per active month</div>
+          </div>
+        </div>
         <div class="fun-facts">
           <h3>Fun Facts</h3>
           <ul>
             ${comparisons.map(fact => `<li>${fact}</li>`).join('')}
           </ul>
+        </div>
+
+        <div class="note" style="max-width:760px;margin:18px auto 0">
+          <div class="note-title">Spicy take</div>
+          <div class="note-body" id="spicyTake">—</div>
         </div>
       </div>
     `;
@@ -357,6 +546,53 @@
     // Animate big numbers
     const numbers = content.querySelectorAll('.big-num');
     numbers.forEach((num, i) => animateIn(num, i * 300));
+
+    // Data-driven spicy templates (always visible)
+    setText("spicyTake", buildSpicyComment(stats));
+  }
+
+  function buildSpicyComment(stats){
+    // Multiple templates, all strictly based on computed stats.
+    const txns = stats.txns || 0;
+    const uniquePlaces = stats.uniquePlaces || 0;
+    const favoriteCount = stats.favoriteCount || 0;
+    const favorite = stats.favorite || "—";
+    const latestHour = stats.latest?.d ? stats.latest.d.getHours() : null;
+    const earliestHour = stats.earliest?.d ? stats.earliest.d.getHours() : null;
+    const busiest = stats.busiestDay?.count || 0;
+    const avg = Number(stats.avgMealCost);
+
+    const share = txns ? favoriteCount / txns : 0;
+
+    if (latestHour !== null && (latestHour <= 3 || latestHour >= 23)) {
+      return `I’m not judging, but… your latest meal was at ${String(latestHour).padStart(2,"0")}:xx. Night owl confirmed. 🌙`;
+    }
+
+    if (earliestHour !== null && earliestHour <= 7) {
+      return `Early bird energy: you’ve eaten as early as ${String(earliestHour).padStart(2,"0")}:xx. Respect. ☀️`;
+    }
+
+    if (favorite !== "—" && favoriteCount >= 15 && share >= 0.55) {
+      return `${favorite} with ${favoriteCount} visits (${Math.round(share*100)}% of your meals)… do you live here? 👑`;
+    }
+
+    if (uniquePlaces >= 15) {
+      return `${uniquePlaces} different spots. You’re not loyal — you’re exploratory. 🗺️`;
+    }
+
+    if (busiest >= 4) {
+      return `${busiest} meals in one day… was that all you? 🔥`;
+    }
+
+    if (Number.isFinite(avg) && avg >= 35) {
+      return `Average meal ¥${fmtMoney(avg)}. Taste is expensive, and you’re okay with that. 🤑`;
+    }
+
+    if (txns >= 80) {
+      return `${txns} meals logged. Consistency is your superpower. 📅`;
+    }
+
+    return "Quietly efficient. Not chaotic. Not dramatic. Just solid dining. ✅";
   }
 
   function renderTimelineSlide(stats) {
@@ -392,6 +628,69 @@
     bars.forEach((bar, i) => animateIn(bar, i * 100));
   }
 
+  function renderBingeSlide(stats){
+    // Reuse the existing "Memory Lane" slide to show concrete highlights first.
+    // (We keep the slide title, but content becomes more Wrapped-like and data-backed.)
+    const slide = document.querySelector('[data-title="Memory Lane"]');
+    if (!slide) return;
+
+    const content = slide.querySelector('.slide-inner');
+
+    const busiest = stats.busiestDay;
+    const earliest = stats.earliest;
+    const latest = stats.latest;
+    const mostExpensive = stats.mostExpensive;
+
+    function fmtWhen(d){
+      if (!d) return "—";
+      return d.toLocaleString(undefined, { year: "numeric", month: "short", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function svcFromRow(row){
+      const svc = String(row?.service ?? "").trim();
+      return svc || "Unknown";
+    }
+
+    content.innerHTML = `
+      <div class="memories">
+        <h2>⚡ The Big Binge</h2>
+        <div class="memory-cards">
+          <div class="memory-card">
+            <div class="memory-icon">🔥</div>
+            <div class="memory-text">
+              <strong>My busiest day</strong><br/>
+              ${busiest ? `${escapeHtml(busiest.day)} — <b>${busiest.count}</b> meals` : "—"}
+            </div>
+          </div>
+          <div class="memory-card">
+            <div class="memory-icon">☀️</div>
+            <div class="memory-text">
+              <strong>Earliest meal</strong><br/>
+              ${earliest?.d ? `${escapeHtml(fmtWhen(earliest.d))} • ${escapeHtml(svcFromRow(earliest.row))}` : "—"}
+            </div>
+          </div>
+          <div class="memory-card">
+            <div class="memory-icon">🌙</div>
+            <div class="memory-text">
+              <strong>Latest meal</strong><br/>
+              ${latest?.d ? `${escapeHtml(fmtWhen(latest.d))} • ${escapeHtml(svcFromRow(latest.row))}` : "—"}
+            </div>
+          </div>
+          <div class="memory-card">
+            <div class="memory-icon">🤑</div>
+            <div class="memory-text">
+              <strong>Most expensive meal</strong><br/>
+              ${mostExpensive?.spend ? `¥${escapeHtml(fmtMoney(mostExpensive.spend))} • ${escapeHtml(mostExpensive.d ? fmtWhen(mostExpensive.d) : "time unknown")} • ${escapeHtml(svcFromRow(mostExpensive.row))}` : "—"}
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+
+    const cards = content.querySelectorAll('.memory-card');
+    cards.forEach((card, i) => animateIn(card, i * 160));
+  }
+
   function renderAchievementsSlide(stats) {
     const slide = document.querySelector('[data-title="Achievement Unlocked!"]');
     if (!slide) return;
@@ -421,44 +720,53 @@
   }
 
   function renderMemoriesSlide(stats) {
+    // Keep a second section in the same slide for additional highlights.
+    // The first section is the "Big Binge" block.
+    renderBingeSlide(stats);
+
     const slide = document.querySelector('[data-title="Memory Lane"]');
     if (!slide) return;
 
     const memories = getMemoryHighlights(stats);
     const content = slide.querySelector('.slide-inner');
 
-    content.innerHTML = `
-      <div class="memories">
-        <h2>📸 Memory Lane</h2>
-        <div class="memory-cards">
-          ${memories.map(memory => `
-            <div class="memory-card">
-              <div class="memory-icon">💭</div>
-              <div class="memory-text">${memory}</div>
-            </div>
-          `).join('')}
+    const extra = `
+      <div class="note" style="max-width:760px;margin:18px auto 0">
+        <div class="note-title">More highlights</div>
+        <div class="note-body">
+          <ul style="margin:0;padding-left:18px">
+            ${memories.map(m => `<li>${escapeHtml(m)}</li>`).join('')}
+          </ul>
         </div>
       </div>
     `;
 
-    // Animate memory cards
-    const cards = content.querySelectorAll('.memory-card');
-    cards.forEach((card, i) => animateIn(card, i * 200));
+    content.querySelector('.memories')?.insertAdjacentHTML('beforeend', extra);
   }
 
   function renderPredictionsSlide(stats) {
-    const slide = document.querySelector('[data-title="2025 Predictions"]');
+    const slide = document.querySelector('[data-title="2026 Predictions"]');
     if (!slide) return;
 
     const predictions = predictFutureHabits(stats);
     const content = slide.querySelector('.slide-inner');
 
+    const year = new Date().getFullYear();
+    const titleYear = year >= 2026 ? year : 2026;
+
+    const items = (predictions && predictions.length)
+      ? predictions
+      : [
+          "Not enough month-to-month data for a trend yet.",
+          "Try importing a longer date range to unlock trend insights."
+        ];
+
     content.innerHTML = `
       <div class="predictions">
-        <h2>🔮 2025 Predictions</h2>
+        <h2>🔮 ${titleYear} Predictions</h2>
         <div class="crystal-ball">🔮</div>
         <div class="prediction-list">
-          ${predictions.map(prediction => `
+          ${items.map(prediction => `
             <div class="prediction-item">
               <div class="prediction-icon">✨</div>
               <div class="prediction-text">${prediction}</div>
@@ -469,8 +777,8 @@
     `;
 
     // Animate predictions
-    const items = content.querySelectorAll('.prediction-item');
-    items.forEach((item, i) => animateIn(item, i * 250));
+    const els = content.querySelectorAll('.prediction-item');
+    els.forEach((item, i) => animateIn(item, i * 250));
   }
 
   function renderShareableQuotesSlide(stats) {
@@ -513,8 +821,9 @@
         position: fixed;
         top: 20px;
         right: 20px;
-        background: #28a745;
-        color: white;
+        background: rgba(125,211,252,.14);
+        border: 1px solid rgba(125,211,252,.30);
+        color: var(--text);
         padding: 10px 20px;
         border-radius: 8px;
         z-index: 10000;
@@ -531,8 +840,7 @@
     const slide = document.querySelector('[data-title="Money Talks"]');
     if (!slide) return;
 
-    const avgMealCost = stats.totalSpend / Math.max(1, stats.txns);
-    setText("avgMealCost", `¥${fmtMoney(avgMealCost)}`);
+    setText("avgMealCost", `¥${fmtMoney(stats.avgMealCost)}`);
     setText("totalInvested", `¥${fmtMoney(stats.totalSpend)}`);
   }
 
@@ -540,23 +848,19 @@
     const slide = document.querySelector('[data-title="Compared to DKU"]');
     if (!slide) return;
 
-    // Calculate approximate percentiles (simplified)
-    const mealsPerMonth = Math.floor(stats.txns / Math.max(1, stats.months.length));
-    const spendingPerMonth = stats.totalSpend / Math.max(1, stats.months.length);
+    // Replace DKU percentiles with self-based, data-backed context.
+    const activeMonths = Math.max(1, stats.activeMonths || stats.months.length || 1);
+    const mealsPerMonth = stats.txns / activeMonths;
+    const spendingPerMonth = stats.totalSpend / activeMonths;
 
-    // Mock percentiles (in real app, you'd have actual DKU data)
-    let frequencyPercentile = "Top 75%";
-    if (mealsPerMonth > 25) frequencyPercentile = "Top 25%";
-    if (mealsPerMonth > 35) frequencyPercentile = "Top 10%";
+    const topMonth = stats.topMonth;
+    const monthRank = topMonth ? 1 : null;
+    const monthCount = stats.months?.length || 0;
 
-    let spendingPercentile = "Top 60%";
-    if (spendingPerMonth > 1500) spendingPercentile = "Top 30%";
-    if (spendingPerMonth > 2500) spendingPercentile = "Top 15%";
-
-    setText("mealFrequency", `${mealsPerMonth} meals/month`);
-    setText("frequencyPercentile", frequencyPercentile);
-    setText("spendingLevel", `¥${fmtMoney(spendingPerMonth)}/month`);
-    setText("spendingPercentile", spendingPercentile);
+    setText("mealFrequency", `${mealsPerMonth.toFixed(1)} meals/active month`);
+    setText("frequencyPercentile", topMonth ? `Peak month: ${topMonth.month}` : "—");
+    setText("spendingLevel", `¥${fmtMoney(spendingPerMonth)}/active month`);
+    setText("spendingPercentile", monthCount ? `Measured across ${monthCount} active months` : "—");
   }
 
   function renderEndingSlide(stats) {
@@ -581,8 +885,14 @@
     renderShareableQuotesSlide(stats);
     renderEndingSlide(stats);
 
+    // Location Legends (rank cards)
+    renderLocationLegends(stats);
+
     // Render charts for remaining slides (compatibility)
     renderCharts(stats);
+
+    // Start autoplay once we have real content.
+    startAuto();
 
     btnExportCurrent.disabled = false;
     btnExportAll.disabled = false;

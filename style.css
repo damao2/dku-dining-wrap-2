@@ -196,7 +196,27 @@ code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;border:1
 
 .wrap-shell{margin-top:10px}
 .wrap-nav{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.nav-center{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0}
 .pager{font-size:12px}
+
+.auto-controls{display:flex;align-items:center;gap:10px;justify-content:center;min-width:0}
+.progress{
+  width: min(360px, 60vw);
+  height: 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.10);
+  background: rgba(255,255,255,.06);
+  overflow: hidden;
+}
+.progress-bar{
+  height: 100%;
+  width: 0%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(125,211,252,.95), rgba(167,139,250,.95));
+  box-shadow: 0 0 20px rgba(125,211,252,.18);
+  transition: width .08s linear;
+}
+.progress.is-paused{opacity:.55}
 
 .slides{position:relative}
 .slide{
@@ -205,9 +225,42 @@ code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;border:1
   border: 1px solid rgba(37,48,74,.65);
   background: rgba(10,12,18,.55);
   padding: 14px;
+  min-height: 62vh;
+  overflow: hidden;
 }
 .slide.active{display:block}
 .slide-inner{padding: 10px}
+
+/* Location Legends should shrink to content (less empty space) */
+.slide[data-title="Location Legends"]{min-height:auto}
+
+.slide.enter{
+  animation: slideEnter .55s cubic-bezier(.2,.9,.2,1);
+}
+
+@keyframes slideEnter{
+  from{opacity:0; transform: translateY(14px) scale(.995)}
+  to{opacity:1; transform: translateY(0) scale(1)}
+}
+
+/* Text reveal (rolling in) */
+.reveal{
+  opacity: 0;
+  transform: translateY(18px);
+  filter: blur(2px);
+  will-change: opacity, transform, filter;
+}
+.reveal.reveal-in{
+  opacity: 1;
+  transform: translateY(0);
+  filter: blur(0);
+  transition: opacity .62s ease, transform .62s cubic-bezier(.2,.9,.2,1), filter .62s ease;
+}
+
+@keyframes slideIn{
+  from{opacity:0; transform: translateY(-6px)}
+  to{opacity:1; transform: translateY(0)}
+}
 
 .kpi-grid{
   display:grid;
@@ -228,8 +281,82 @@ code{background:rgba(255,255,255,.06);padding:2px 6px;border-radius:8px;border:1
   display:grid;
   grid-template-columns: 1.2fr .8fr;
   gap: 14px;
+  align-items: start;
 }
 .grid-1{display:grid;grid-template-columns:1fr;gap:14px}
+
+/* Slide-specific layout tuning */
+.grid-2.grid-2-eq{grid-template-columns: 1fr 1fr; gap: 16px;}
+.grid-2.grid-2-wide{grid-template-columns: 1.55fr .75fr; gap: 16px;}
+
+/* Card 4: stacked charts (use vertical space better) */
+.stack-charts{display:grid;grid-template-columns:1fr;gap:16px}
+.chart-panel{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  padding: 14px;
+}
+.chart-panel h3{margin-bottom:10px}
+.slide[data-title="The Daily Rhythm"] canvas{
+  width: 100% !important;
+  height: 260px !important;
+}
+
+/* Card 5: ranking cards (big + small) */
+.legends-grid{align-items:start}
+.rank-section{min-width:0}
+.rank-block{display:flex;flex-direction:column;gap:12px}
+
+.rank-big{
+  border-radius: 20px;
+  border: 1px solid rgba(125,211,252,.26);
+  background: linear-gradient(135deg, rgba(125,211,252,.13), rgba(167,139,250,.10));
+  padding: 16px;
+}
+
+.rank-banner{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rank-banner-left{min-width:0}
+.rank-banner-right{flex:0 0 auto}
+
+.rank-dot{
+  display:inline-grid;
+  place-items:center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  margin-right: 10px;
+  border: 1px solid rgba(125,211,252,.30);
+  background: rgba(125,211,252,.14);
+  font-size: 12px;
+  font-weight: 900;
+  color: var(--text);
+  flex: 0 0 auto;
+}
+
+.rank-title{display:flex;align-items:center;gap:0;min-width:0}
+.rank-title-big{font-size:20px;font-weight:950;letter-spacing:.2px}
+.rank-title{font-size:14px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+.rank-value{font-weight:850;color:var(--text)}
+.rank-value-big{font-size:18px}
+.rank-sub{margin-top:6px;color:var(--muted);font-size:13px;line-height:1.35}
+
+.rank-smalls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.rank-smalls-vert{display:flex;flex-direction:column;gap:12px}
+.rank-small{
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.08);
+  background: rgba(255,255,255,.03);
+  padding: 12px;
+  min-width:0;
+}
+.rank-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.rank-small .rank-sub{margin-top:6px}
+
+@media (max-width: 780px){
+  .rank-smalls{grid-template-columns:1fr}
+}
 
 .list{margin:0;padding-left:18px}
 .list li{margin:8px 0}

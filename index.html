@@ -82,7 +82,15 @@
       <div class="wrap-shell">
         <div class="wrap-nav">
           <button id="btnPrev" class="btn btn-secondary">← Prev</button>
-          <div id="pager" class="pager muted">Card 0 / 0</div>
+          <div class="nav-center">
+            <div id="pager" class="pager muted">Card 0 / 0</div>
+            <div class="auto-controls">
+              <button id="btnPlayPause" class="btn btn-secondary btn-small" aria-label="Pause autoplay">Pause</button>
+              <div class="progress" aria-label="Slide progress">
+                <div id="slideProgress" class="progress-bar"></div>
+              </div>
+            </div>
+          </div>
           <button id="btnNext" class="btn btn-secondary">Next →</button>
         </div>
 
@@ -111,14 +119,14 @@
           <!-- Slide 4: Daily Rhythm -->
           <section class="slide" data-title="The Daily Rhythm">
             <div class="slide-inner">
-              <div class="grid-2">
-                <div>
+              <div class="stack-charts">
+                <div class="chart-panel">
                   <h3>Hour of day</h3>
-                  <canvas id="chartHours" height="220"></canvas>
+                  <canvas id="chartHours"></canvas>
                 </div>
-                <div>
+                <div class="chart-panel">
                   <h3>Day of week</h3>
-                  <canvas id="chartWeekdays" height="220"></canvas>
+                  <canvas id="chartWeekdays"></canvas>
                 </div>
               </div>
             </div>
@@ -127,14 +135,14 @@
           <!-- Slide 5: Location Legends -->
           <section class="slide" data-title="Location Legends">
             <div class="slide-inner">
-              <div class="grid-2">
-                <div>
+              <div class="grid-2 grid-2-eq legends-grid">
+                <div class="rank-section">
                   <h3>Top places by spend</h3>
-                  <canvas id="chartTopSpend" height="220"></canvas>
+                  <div id="rankSpend" class="rank-block"></div>
                 </div>
-                <div>
+                <div class="rank-section">
                   <h3>Top places by visits</h3>
-                  <ol id="listTopVisits" class="list"></ol>
+                  <div id="rankVisits" class="rank-block"></div>
                 </div>
               </div>
             </div>
@@ -190,7 +198,7 @@
                   </div>
                 </div>
                 <div class="comparison-note">
-                  <p>Compared to typical DKU students 📊</p>
+                  <p>Based on your own data 📊</p>
                 </div>
               </div>
             </div>
@@ -203,8 +211,8 @@
             </div>
           </section>
 
-          <!-- Slide 10: 2025 Predictions -->
-          <section class="slide" data-title="2025 Predictions">
+          <!-- Slide 10: 2026 Predictions -->
+          <section class="slide" data-title="2026 Predictions">
             <div class="slide-inner">
               <!-- Dynamic content rendered by JS -->
             </div>
